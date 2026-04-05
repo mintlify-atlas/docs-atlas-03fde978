@@ -1,0 +1,79 @@
+---
+title: "AMD ROCm Documentation"
+description: "Open-source GPU compute stack for AMD GPUs — from low-level kernels to high-level AI and HPC applications."
+---
+
+AMD ROCm is an open-source software platform optimized to extract HPC and AI workload performance from AMD Instinct and AMD Radeon GPUs while maintaining compatibility with industry software frameworks. ROCm provides the full stack: compilers, runtimes, libraries, debuggers, and profilers for GPU-accelerated computing.
+
+<CardGroup cols={2}>
+  <Card title="What is ROCm?" icon="circle-info" href="/what-is-rocm">
+    Learn about the ROCm software stack, its components, and what you can build with it.
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Install ROCm and run your first GPU-accelerated program in minutes.
+  </Card>
+  <Card title="ROCm for AI" icon="brain" href="/guides/rocm-for-ai">
+    Use ROCm to train and run AI models with PyTorch and TensorFlow.
+  </Card>
+  <Card title="ROCm for HPC" icon="microchip" href="/guides/rocm-for-hpc">
+    Accelerate high-performance computing workloads on AMD GPUs.
+  </Card>
+</CardGroup>
+
+## Explore the documentation
+
+<CardGroup cols={2}>
+  <Card title="GPU Architecture" icon="server" href="/concepts/gpu-architecture">
+    Understand AMD GPU architectures — CDNA (Instinct) and RDNA (Radeon).
+  </Card>
+  <Card title="Programming Models" icon="code" href="/concepts/programming-models">
+    Learn HIP, OpenCL, and OpenMP for GPU programming.
+  </Card>
+  <Card title="Libraries Reference" icon="book" href="/reference/libraries">
+    Explore math, ML, communication, and primitive libraries.
+  </Card>
+  <Card title="Tools & Compilers" icon="wrench" href="/reference/tools-and-compilers">
+    Profilers, debuggers, HIPIFY, and the ROCm compiler toolchain.
+  </Card>
+  <Card title="Compatibility Matrix" icon="table" href="/reference/compatibility-matrix">
+    Check supported hardware, OS, and framework combinations.
+  </Card>
+  <Card title="Release Notes" icon="newspaper" href="/release/release-notes">
+    See what's new in the latest ROCm release.
+  </Card>
+</CardGroup>
+
+## Get started quickly
+
+<Steps>
+  <Step title="Check hardware compatibility">
+    Verify your AMD GPU is supported. ROCm supports CDNA4/3/2/1 (Instinct) and RDNA4/3 (Radeon) architectures. See the [compatibility matrix](/reference/compatibility-matrix).
+  </Step>
+  <Step title="Install ROCm">
+    Follow the [quick start guide](/quickstart) to install ROCm on Linux using the AMD package repositories.
+  </Step>
+  <Step title="Verify the installation">
+    Run `rocminfo` and `rocm-smi` to confirm ROCm is installed and your GPU is detected.
+  </Step>
+  <Step title="Start building">
+    Write GPU-accelerated code using [HIP](/concepts/programming-models), or get started with [PyTorch on ROCm](/guides/deep-learning-frameworks).
+  </Step>
+</Steps>
+
+## Core components
+
+ROCm is composed of modular open-source components that you can use independently or together:
+
+| Category | Components |
+|---|---|
+| Runtime & Compilers | HIP, ROCR Runtime, ROCm LLVM, HIPCC |
+| Math Libraries | rocBLAS, rocFFT, rocRAND, rocSOLVER, rocSPARSE |
+| ML & AI | MIOpen, MIGraphX, Composable Kernel |
+| Communication | RCCL, rocSHMEM |
+| Profiling | ROCprofiler-SDK, ROCm Compute Profiler |
+| System Management | AMD SMI, rocminfo |
+| Debugging | ROCgdb, ROCdbgapi |
+
+<Note>
+ROCm is particularly well-suited for GPU-accelerated HPC, AI/ML, scientific computing, and CAD workloads. It supports programming through HIP (CUDA-compatible), OpenCL, and OpenMP.
+</Note>

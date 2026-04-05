@@ -1,0 +1,86 @@
+---
+title: "ROCm libraries"
+description: "Complete reference for ROCm math, ML, communication, and primitive libraries"
+keywords: ["ROCm", "libraries", "math", "machine learning", "communication", "primitives", "rocBLAS", "MIOpen", "RCCL"]
+---
+
+ROCm includes a comprehensive set of GPU-accelerated libraries organized across four categories: math, machine learning and computer vision, communication, and C++ primitives. These libraries are implemented in HIP and target AMD GPU architectures supported by ROCm.
+
+<CardGroup cols={2}>
+  <Card title="Math libraries" icon="calculator" href="#math-libraries">
+    BLAS, FFT, sparse, random number generation, and linear algebra
+  </Card>
+  <Card title="ML and computer vision" icon="brain" href="#ml-and-computer-vision">
+    Deep learning, inference, image processing, and video decode
+  </Card>
+  <Card title="Communication" icon="network" href="#communication">
+    Multi-GPU and multi-node collective communication
+  </Card>
+  <Card title="Primitives" icon="cube" href="#primitives">
+    Parallel algorithms and tensor operations
+  </Card>
+</CardGroup>
+
+## Math libraries
+
+Math libraries provide GPU-accelerated implementations of common numerical operations, including dense and sparse linear algebra, fast Fourier transforms, random number generation, and matrix operations.
+
+| Library | Description | GitHub |
+|---------|-------------|--------|
+| **rocBLAS** | BLAS implementation in HIP, optimized for AMD GPUs | [ROCm/rocBLAS](https://github.com/ROCm/rocBLAS) |
+| **hipBLAS** | BLAS-marshalling library supporting rocBLAS and cuBLAS backends | [ROCm/hipBLAS](https://github.com/ROCm/hipBLAS) |
+| **hipBLASLt** | General matrix-matrix operations with a flexible API, extending traditional BLAS | [ROCm/hipBLASLt](https://github.com/ROCm/hipBLASLt) |
+| **rocFFT** | Fast Fourier transforms (FFT) library written in HIP | [ROCm/rocFFT](https://github.com/ROCm/rocFFT) |
+| **hipFFT** | FFT-marshalling library supporting rocFFT or cuFFT backends | [ROCm/hipFFT](https://github.com/ROCm/hipFFT) |
+| **rocRAND** | Pseudorandom and quasirandom number generation on GPU | [ROCm/rocRAND](https://github.com/ROCm/rocRAND) |
+| **hipRAND** | Ports CUDA applications using cuRAND into the HIP layer | [ROCm/hipRAND](https://github.com/ROCm/hipRAND) |
+| **rocSOLVER** | LAPACK routines on ROCm, implemented in HIP and optimized for AMD discrete GPUs | [ROCm/rocSOLVER](https://github.com/ROCm/rocSOLVER) |
+| **hipSOLVER** | LAPACK-marshalling library supporting rocSOLVER and cuSOLVER backends | [ROCm/hipSOLVER](https://github.com/ROCm/hipSOLVER) |
+| **rocSPARSE** | BLAS for sparse computation implemented on the ROCm runtime in HIP | [ROCm/rocSPARSE](https://github.com/ROCm/rocSPARSE) |
+| **hipSPARSE** | SPARSE-marshalling library supporting rocSPARSE and cuSPARSE backends | [ROCm/hipSPARSE](https://github.com/ROCm/hipSPARSE) |
+| **hipSPARSELt** | SPARSE-marshalling library with multiple supported backends | [ROCm/hipSPARSELt](https://github.com/ROCm/hipSPARSELt) |
+| **rocWMMA** | C++ library for accelerating mixed-precision matrix multiply-accumulate (MMA) operations | [ROCm/rocWMMA](https://github.com/ROCm/rocWMMA) |
+| **rocALUTION** | Sparse linear algebra library for fine-grained parallelism on ROCm | [ROCm/rocALUTION](https://github.com/ROCm/rocALUTION) |
+| **Tensile** | Creates benchmark-driven backend libraries for GEMMs and N-dimensional tensor contractions | [ROCm/Tensile](https://github.com/ROCm/Tensile) |
+| **half** | C++ header-only library providing IEEE 754 conformant 16-bit half-precision floating-point | [ROCm/half](https://github.com/ROCm/half) |
+| **hipfort** | Fortran interface library for accessing GPU kernels | [ROCm/hipfort](https://github.com/ROCm/hipfort) |
+
+## ML and computer vision
+
+These libraries accelerate machine learning training, inference, and computer vision workloads on AMD GPUs.
+
+| Library | Description | GitHub |
+|---------|-------------|--------|
+| **MIOpen** | Open-source deep-learning library for GPU-accelerated neural network primitives | [ROCm/MIOpen](https://github.com/ROCm/MIOpen) |
+| **MIGraphX** | Graph inference engine that accelerates machine learning model inference | [ROCm/AMDMIGraphX](https://github.com/ROCm/AMDMIGraphX) |
+| **Composable Kernel** | Programming model for writing performance-critical kernels for ML workloads across multiple architectures | [ROCm/composable_kernel](https://github.com/ROCm/composable_kernel) |
+| **MIVisionX** | Comprehensive computer vision and machine learning libraries, utilities, and applications | [ROCm/MIVisionX](https://github.com/ROCm/MIVisionX) |
+| **RPP** | Comprehensive high-performance computer vision library for AMD processors with HIP/OpenCL/CPU back-ends | [ROCm/rpp](https://github.com/ROCm/rpp) |
+| **rocAL** | Augmentation library designed to decode and process images and videos | [ROCm/rocAL](https://github.com/ROCm/rocAL) |
+| **rocDecode** | High-performance SDK for access to video decoding features on AMD GPUs | [ROCm/rocDecode](https://github.com/ROCm/rocDecode) |
+| **rocJPEG** | Library for decoding JPEG images on AMD GPUs | [ROCm/rocJPEG](https://github.com/ROCm/rocJPEG) |
+| **rocPyDecode** | Provides access to rocDecode APIs in both Python and C/C++ | [ROCm/rocPyDecode](https://github.com/ROCm/rocPyDecode) |
+
+## Communication
+
+Communication libraries enable efficient data exchange across multiple GPUs and compute nodes.
+
+| Library | Description | GitHub |
+|---------|-------------|--------|
+| **RCCL** | Standalone library providing multi-GPU and multi-node collective communication primitives | [ROCm/rccl](https://github.com/ROCm/rccl) |
+| **rocSHMEM** | Intra-kernel networking library providing GPU-centric networking through an OpenSHMEM-like interface | [ROCm/rocSHMEM](https://github.com/ROCm/rocSHMEM) |
+
+<Note>
+RCCL implements the NCCL API, making it a drop-in replacement for NCCL in existing multi-GPU applications. It supports ring-based collective operations including `AllReduce`, `Broadcast`, `Reduce`, `AllGather`, and `ReduceScatter`.
+</Note>
+
+## Primitives
+
+Primitive libraries provide general-purpose parallel algorithms and tensor operations for use across many workloads.
+
+| Library | Description | GitHub |
+|---------|-------------|--------|
+| **rocPRIM** | Header-only library for HIP parallel primitives including scan, sort, and reduce | [ROCm/rocPRIM](https://github.com/ROCm/rocPRIM) |
+| **hipCUB** | Thin header-only wrapper on rocPRIM or CUB, enabling porting of CUB-based projects to HIP | [ROCm/hipCUB](https://github.com/ROCm/hipCUB) |
+| **rocThrust** | Parallel algorithm library modeled after the C++ Thrust library | [ROCm/rocThrust](https://github.com/ROCm/rocThrust) |
+| **hipTensor** | AMD's C++ library for accelerating tensor primitives based on the Composable Kernel library | [ROCm/hipTensor](https://github.com/ROCm/hipTensor) |

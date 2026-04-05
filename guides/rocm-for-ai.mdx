@@ -1,0 +1,429 @@
+---
+title: "ROCm for AI"
+description: "Using ROCm for AI and machine learning workloads"
+---
+
+ROCm is an open-source software platform that enables high-performance computing and machine learning applications. It features the ability to accelerate training, fine-tuning, and inference for AI application development. With ROCm, you can access the full power of AMD GPUs, which can significantly improve the performance and efficiency of AI workloads.
+
+You can use ROCm to perform distributed training across multiple GPUs or nodes simultaneously. ROCm also supports mixed-precision training to reduce memory and compute requirements. For fine-tuning, ROCm provides access to various algorithms and optimization techniques. For inference, ROCm provides quantization, GEMM tuning, and optimization via Composable Kernel.
+
+## Why use AMD GPUs for AI
+
+AMD Instinct GPUs are purpose-built for data center AI and HPC workloads. Key advantages include:
+
+- **High-bandwidth memory (HBM)** — AMD Instinct MI300X GPUs include up to 192 GB of HBM3 with over 5 TB/s of memory bandwidth, enabling large model training and inference without CPU offloading.
+- **Open software stack** — ROCm is fully open-source, enabling deep integration with PyTorch, TensorFlow, JAX, and community frameworks.
+- **Distributed training** — Multi-GPU and multi-node training via RCCL (ROCm Collective Communications Library), PyTorch DDP, and FSDP.
+- **Mixed-precision support** — Native support for FP32, BF16, FP16, and INT8 data types for optimal training and inference throughput.
+- **Broad ecosystem** — Supports popular ML libraries including MIOpen (deep learning primitives), MIGraphX (graph optimization), and Composable Kernel.
+
+## Supported frameworks and libraries
+
+<CardGroup cols={2}>
+  <Card title="PyTorch" icon="fire">
+    The primary framework for ROCm AI workloads. ROCm's PyTorch fork is upstreamed to the official PyTorch repository and actively maintained by AMD.
+  </Card>
+  <Card title="TensorFlow" icon="layer-group">
+    ROCm-enabled TensorFlow supports Keras, distributed training, and GPU-accelerated ops via the `tensorflow-rocm` package.
+  </Card>
+  <Card title="JAX" icon="bolt">
+    JAX on ROCm enables high-performance numerical computing with automatic differentiation. Supports MaxText and distributed training workflows.
+  </Card>
+  <Card title="DGL" icon="diagram-project">
+    Deep Graph Library for graph neural network workloads with ROCm GPU acceleration.
+  </Card>
+</CardGroup>
+
+### Key ML libraries
+
+| Library | Purpose |
+|---|---|
+| **MIOpen** | GPU-accelerated deep learning primitives (convolutions, batch norm, pooling, RNNs) |
+| **MIGraphX** | Graph inference engine for ONNX model optimization and deployment |
+| **Composable Kernel** | High-performance GEMM and convolution kernels for AMD GPUs |
+| **RCCL** | Collective communication library for multi-GPU training (AllReduce, AllGather, etc.) |
+| **rocBLAS** | GPU-accelerated BLAS routines (matrix multiply, dot product, etc.) |
+
+## Setting up ROCm for AI
+
+<Steps>
+  <Step title="Check system requirements">
+    Before installing, verify your system meets hardware and software prerequisites. ROCm supports specific AMD GPU architectures and Linux distributions.
+
+    ```bash
+    # Check your GPU
+    lspci | grep -i amd
+
+    # Check Linux kernel version
+    uname -r
+    ```
+
+    Consult the [ROCm system requirements](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html) for supported GPU and OS combinations.
+  </Step>
+
+  <Step title="Install ROCm">
+    Install ROCm via your Linux distribution's package manager. The quick-start path for Ubuntu:
+
+    ```bash
+    # Add the ROCm repository
+    sudo apt update
+    wget https://repo.radeon.com/amdgpu-install/latest/ubuntu/jammy/amdgpu-install_6.4.60400-1_all.deb
+    sudo apt install ./amdgpu-install_6.4.60400-1_all.deb
+
+    # Install ROCm
+    sudo amdgpu-install --usecase=rocm
+    ```
+
+    After installation, follow the [post-install steps](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/post-install.html) to configure your PATH and verify the installation.
+  </Step>
+
+  <Step title="Validate the installation">
+    Use `rocminfo` to confirm GPUs are detected:
+
+    ```bash
+    rocminfo
+    ```
+
+    You should see output listing detected AMD GPU agents. Then install the ROCm Validation Suite to run hardware benchmarks:
+
+    ```bash
+    sudo apt install rocm-validation-suite
+    ```
+  </Step>
+
+  <Step title="Install a deep learning framework">
+    The recommended approach is to use AMD's prebuilt Docker images, which include ROCm, PyTorch or TensorFlow, and all dependencies pre-configured.
+
+    ```bash
+    # Pull the official ROCm PyTorch image
+    docker pull rocm/pytorch:latest
+
+    # Run the container with GPU access
+    docker run -it \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      --ipc=host \
+      --shm-size 8G \
+      rocm/pytorch:latest
+    ```
+
+    See the [deep learning frameworks guide](/guides/deep-learning-frameworks) for full installation options.
+  </Step>
+
+  <Step title="Run system health benchmarks">
+    Before running AI workloads, validate hardware performance using RCCL tests for multi-GPU communication and TransferBench for memory bandwidth:
+
+    ```bash
+    # Build and run RCCL tests
+    git clone https://github.com/ROCm/rccl-tests.git
+    cd rccl-tests && make
+    ./build/all_reduce_perf -b 8 -e 128M -f 2 -g 8
+
+    # Build and run TransferBench
+    git clone https://github.com/ROCm/TransferBench.git
+    cd TransferBench && CC=hipcc make
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  Disable NUMA auto-balancing before running large AI workloads on multi-socket systems to avoid memory migration overhead:
+
+  ```bash
+  sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'
+  ```
+</Note>
+
+## Training deep learning models
+
+Training on AMD GPUs uses the same PyTorch API as CUDA — ROCm maps `torch.cuda` calls transparently to the AMD HIP runtime.
+
+### Single-GPU training
+
+```python
+import torch
+
+# ROCm GPUs appear as 'cuda' devices in PyTorch
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {torch.cuda.get_device_name(0)}")
+
+model = MyModel().to(device)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+
+for batch in dataloader:
+    inputs, labels = batch[0].to(device), batch[1].to(device)
+    optimizer.zero_grad()
+    outputs = model(inputs)
+    loss = criterion(outputs, labels)
+    loss.backward()
+    optimizer.step()
+```
+
+### Distributed training with DDP
+
+PyTorch Distributed Data Parallel (DDP) is the standard approach for multi-GPU training. DDP replicates the model across all GPUs and uses `AllReduce` to synchronize gradients.
+
+The DDP workflow on multiple GPUs:
+
+1. Split the global training batch into local batches — for example, with 8 GPUs and a global batch of 32, each GPU processes a local batch of 4.
+2. Copy the model to every device so each can process its local batches independently.
+3. Run forward and backward passes in parallel on each device, computing gradients.
+4. Synchronize gradients via `allreduce` and update model weights, then redistribute to each device.
+
+```python
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+def setup(rank, world_size):
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+def cleanup():
+    dist.destroy_process_group()
+
+def train(rank, world_size):
+    setup(rank, world_size)
+    model = MyModel().to(rank)
+    ddp_model = DDP(model, device_ids=[rank])
+    # ... training loop
+    cleanup()
+```
+
+Launch with `torchrun`:
+
+```bash
+torchrun --nproc_per_node=8 train.py
+```
+
+### Fully Sharded Data Parallel (FSDP)
+
+For very large models that don't fit on a single GPU, PyTorch FSDP shards model parameters, optimizer states, and gradients across all DDP ranks — reducing per-GPU memory footprint compared to DDP.
+
+```python
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+
+model = FSDP(MyLargeModel())
+```
+
+### Automatic Mixed Precision (AMP)
+
+AMP reduces training memory and time by using FP16 or BF16 for most operations while keeping FP32 for numerically sensitive ones:
+
+```python
+from torch.cuda.amp import autocast, GradScaler
+
+scaler = GradScaler()
+
+for batch in dataloader:
+    with autocast():
+        output = model(batch)
+        loss = criterion(output, labels)
+    scaler.scale(loss).backward()
+    scaler.step(optimizer)
+    scaler.update()
+```
+
+### DeepSpeed
+
+DeepSpeed is a popular choice for large-scale training with ZeRO memory optimization stages, 3D parallelism, and efficient gradient checkpointing:
+
+```bash
+pip install deepspeed
+
+# Launch with DeepSpeed
+deepspeed --num_gpus=8 train.py --deepspeed ds_config.json
+```
+
+## Running inference with ROCm
+
+ROCm supports multiple inference deployment patterns from simple single-GPU model loading to high-throughput multi-GPU serving.
+
+<Tabs>
+  <Tab title="vLLM">
+    vLLM is the recommended framework for high-throughput LLM inference on AMD GPUs. It uses PagedAttention to dynamically allocate GPU HBM and supports tensor parallel multi-GPU serving.
+
+    **Build the vLLM ROCm Docker image:**
+
+    ```bash
+    git clone https://github.com/vllm-project/vllm.git
+    cd vllm
+    docker build -f docker/Dockerfile.rocm -t vllm-rocm .
+    ```
+
+    **Start the API server (single GPU):**
+
+    ```bash
+    docker run -it \
+      --network=host \
+      --group-add=video \
+      --ipc=host \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device /dev/kfd \
+      --device /dev/dri \
+      -v <path/to/model>:/app/model \
+      vllm-rocm bash
+
+    # Inside the container:
+    python -m vllm.entrypoints.api_server \
+      --model /app/model \
+      --dtype float16 \
+      --port 8000 &
+    ```
+
+    **Test the server:**
+
+    ```bash
+    curl http://localhost:8000/generate \
+      -H "Content-Type: application/json" \
+      -d '{"prompt": "What is AMD Instinct?", "max_tokens": 80, "temperature": 0.0}'
+    ```
+
+    **Multi-GPU tensor parallel serving:**
+
+    ```bash
+    # Use -tp to set tensor parallel size
+    python -m vllm.entrypoints.api_server \
+      --model /app/model \
+      --dtype float16 \
+      -tp 8 \
+      --port 8000 &
+    ```
+  </Tab>
+  <Tab title="Hugging Face TGI">
+    Text Generation Inference (TGI) is Hugging Face's LLM serving framework with support for Flash Attention, Paged Attention, GPTQ, AWQ, and tensor parallel multi-GPU.
+
+    **Launch TGI (single GPU):**
+
+    ```bash
+    docker run --name tgi --rm -it \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      --ipc=host \
+      --shm-size 256g \
+      --net host \
+      -v $PWD:/data \
+      --env HUGGINGFACE_HUB_CACHE=/data \
+      ghcr.io/huggingface/text-generation-inference:latest-rocm
+
+    # Inside the container:
+    export ROCM_USE_FLASH_ATTN_V2_TRITON=True
+    text-generation-launcher \
+      --model-id NousResearch/Meta-Llama-3-70B \
+      --dtype float16 \
+      --port 8000 &
+    ```
+
+    **Multi-GPU serving:**
+
+    ```bash
+    text-generation-launcher \
+      --model-id NousResearch/Meta-Llama-3-8B \
+      --dtype float16 \
+      --port 8000 \
+      --num-shard 4 &
+    ```
+  </Tab>
+  <Tab title="Hugging Face Transformers">
+    For direct model loading and inference using the Hugging Face `transformers` library:
+
+    ```python
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    import torch
+
+    model_id = "meta-llama/Llama-2-7b-hf"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype=torch.float16,
+        device_map="auto"  # automatically places layers on available GPUs
+    )
+
+    inputs = tokenizer("Hello, AMD ROCm!", return_tensors="pt").to("cuda")
+    with torch.no_grad():
+        output = model.generate(**inputs, max_new_tokens=100)
+    print(tokenizer.decode(output[0], skip_special_tokens=True))
+    ```
+  </Tab>
+</Tabs>
+
+## Fine-tuning LLMs on ROCm
+
+Fine-tuning adapts a pre-trained model to a specific domain or task. ROCm supports parameter-efficient fine-tuning (PEFT) techniques that dramatically reduce the memory and compute requirements.
+
+### LoRA and QLoRA
+
+Low-Rank Adaptation (LoRA) decomposes the weight update matrix `ΔW` into the product of two smaller low-rank matrices A and B, significantly reducing trainable parameters. For a 7B-parameter model, LoRA can reduce trainable parameters from 7B to tens of millions.
+
+LoRA is integrated into the [Hugging Face PEFT library](https://huggingface.co/docs/peft):
+
+```python
+from peft import LoraConfig, get_peft_model
+from transformers import AutoModelForCausalLM
+
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf")
+
+lora_config = LoraConfig(
+    r=16,           # rank of the update matrices
+    lora_alpha=32,
+    target_modules=["q_proj", "v_proj"],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM"
+)
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+# trainable params: 4,194,304 || all params: 6,742,609,920
+```
+
+### SFTTrainer with TRL
+
+The Transformer Reinforcement Learning (TRL) `SFTTrainer` provides a high-level API that encapsulates PEFT and LoRA configuration:
+
+```python
+from trl import SFTTrainer
+from transformers import TrainingArguments
+
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=dataset,
+    peft_config=lora_config,
+    dataset_text_field="text",
+    args=TrainingArguments(
+        output_dir="./results",
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=4,
+        learning_rate=2e-4,
+        fp16=True,
+        num_train_epochs=3,
+    ),
+)
+trainer.train()
+```
+
+<Note>
+  ROCm supports both single-accelerator and multi-accelerator fine-tuning. For multi-GPU fine-tuning, combine LoRA with PyTorch FSDP to shard the base model weights while keeping LoRA adapters on each device.
+</Note>
+
+## Sub-topics
+
+<CardGroup cols={2}>
+  <Card title="Deep learning frameworks" href="/guides/deep-learning-frameworks">
+    Install and configure PyTorch, TensorFlow, and JAX for ROCm
+  </Card>
+  <Card title="System optimization" href="/guides/system-optimization">
+    Tune your system for maximum GPU performance
+  </Card>
+  <Card title="System debugging" href="/guides/system-debugging">
+    Diagnose and fix ROCm installation and runtime issues
+  </Card>
+  <Card title="ROCm for HPC" href="/guides/rocm-for-hpc">
+    Use ROCm for scientific and high-performance computing
+  </Card>
+</CardGroup>

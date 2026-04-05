@@ -1,0 +1,509 @@
+---
+title: "Deep learning frameworks"
+description: "Installing and using PyTorch, TensorFlow, and other frameworks with ROCm"
+---
+
+ROCm offers a complete ecosystem for developing and running deep learning applications efficiently. It provides ROCm-compatible versions of popular frameworks and libraries, such as PyTorch, TensorFlow, JAX, and DGL.
+
+The AMD ROCm organization actively contributes to open-source development and collaborates closely with framework organizations. This collaboration ensures that framework-specific optimizations effectively leverage AMD GPUs.
+
+## Supported frameworks overview
+
+| Framework | Installation options | ROCm compatibility |
+|---|---|---|
+| **PyTorch** | Docker image, pip wheels, source | Fully supported — ROCm changes upstreamed to `pytorch/pytorch` |
+| **TensorFlow** | Docker image, pip wheels | Supported via `tensorflow-rocm` package |
+| **JAX** | Docker image | Supported via AMD's JAX fork |
+| **DGL** | Docker image | Supported for graph neural network workloads |
+
+<Note>
+  For a complete list of supported framework versions on ROCm, see the [ROCm compatibility matrix](https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html).
+</Note>
+
+## Installation methods
+
+Docker images are the **recommended installation method** for all frameworks. They include ROCm, the framework, and all dependencies pre-configured and validated together. Pip wheels are available for native installation but require ROCm to be installed on the host first.
+
+<Tabs>
+  <Tab title="PyTorch">
+    ### PyTorch with ROCm
+
+    PyTorch on ROCm uses the same API as standard PyTorch — `torch.cuda` calls are transparently mapped to the AMD HIP runtime. Existing PyTorch code runs without modification on ROCm.
+
+    #### Docker (recommended)
+
+    ```bash
+    # Pull the official ROCm PyTorch image
+    docker pull rocm/pytorch:latest
+
+    # Run with GPU access
+    docker run -it \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      --ipc=host \
+      --shm-size 8G \
+      rocm/pytorch:latest
+    ```
+
+    #### Pip wheels (native install)
+
+    After [installing ROCm](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/), install the ROCm-enabled PyTorch wheel:
+
+    ```bash
+    # Install PyTorch for ROCm 6.2
+    pip install torch torchvision torchaudio \
+      --index-url https://download.pytorch.org/whl/rocm6.2
+    ```
+
+    #### Verify GPU availability
+
+    ```python
+    import torch
+
+    print(f"PyTorch version: {torch.__version__}")
+    print(f"ROCm available: {torch.cuda.is_available()}")
+    print(f"GPU count: {torch.cuda.device_count()}")
+    print(f"GPU name: {torch.cuda.get_device_name(0)}")
+
+    # Create a tensor on GPU
+    x = torch.rand(3, 3).cuda()
+    print(f"Tensor device: {x.device}")
+    ```
+
+    Expected output:
+
+    ```
+    PyTorch version: 2.4.0+rocm6.2
+    ROCm available: True
+    GPU count: 8
+    GPU name: AMD Instinct MI300X
+    Tensor device: cuda:0
+    ```
+  </Tab>
+  <Tab title="TensorFlow">
+    ### TensorFlow with ROCm
+
+    TensorFlow for ROCm is distributed as the `tensorflow-rocm` package. It is maintained by AMD and kept close to parity with the official TensorFlow releases.
+
+    #### Docker (recommended)
+
+    ```bash
+    # Pull the ROCm TensorFlow image
+    docker pull rocm/tensorflow:latest
+
+    # Run with GPU access
+    docker run -it \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      --ipc=host \
+      --shm-size 8G \
+      rocm/tensorflow:latest
+    ```
+
+    #### Pip wheels (native install)
+
+    ```bash
+    # Install tensorflow-rocm
+    pip install tensorflow-rocm
+    ```
+
+    #### Verify GPU availability
+
+    ```python
+    import tensorflow as tf
+
+    print(f"TensorFlow version: {tf.__version__}")
+    print(f"GPU devices: {tf.config.list_physical_devices('GPU')}")
+
+    # Run a simple operation on GPU
+    with tf.device('/GPU:0'):
+        a = tf.constant([[1.0, 2.0], [3.0, 4.0]])
+        b = tf.constant([[5.0, 6.0], [7.0, 8.0]])
+        c = tf.matmul(a, b)
+        print(f"Matrix multiply result:\n{c}")
+    ```
+
+    Expected output:
+
+    ```
+    TensorFlow version: 2.14.0
+    GPU devices: [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
+    Matrix multiply result:
+    [[19. 22.]
+     [43. 50.]]
+    ```
+  </Tab>
+  <Tab title="JAX">
+    ### JAX with ROCm
+
+    JAX on ROCm enables high-performance numerical computing with automatic differentiation, JIT compilation via XLA, and GPU-accelerated array operations. AMD maintains a JAX fork with ROCm support.
+
+    #### Docker (recommended)
+
+    ```bash
+    # Use AMD's ROCm JAX Docker image
+    docker pull rocm/jax:latest
+
+    docker run -it \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      --ipc=host \
+      rocm/jax:latest
+    ```
+
+    #### Verify GPU availability
+
+    ```python
+    import jax
+    import jax.numpy as jnp
+
+    print(f"JAX version: {jax.__version__}")
+    print(f"Available backends: {jax.devices()}")
+
+    # JIT-compiled function running on GPU
+    @jax.jit
+    def matrix_multiply(a, b):
+        return jnp.dot(a, b)
+
+    a = jnp.ones((1024, 1024))
+    b = jnp.ones((1024, 1024))
+    result = matrix_multiply(a, b)
+    print(f"Result shape: {result.shape}, device: {result.device()}")
+    ```
+  </Tab>
+  <Tab title="DGL">
+    ### DGL (Deep Graph Library) with ROCm
+
+    DGL supports graph neural network workloads on AMD GPUs via ROCm.
+
+    #### Docker (recommended)
+
+    ```bash
+    docker pull rocm/dgl:latest
+
+    docker run -it \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      --ipc=host \
+      rocm/dgl:latest
+    ```
+
+    #### Verify GPU availability
+
+    ```python
+    import dgl
+    import torch
+
+    print(f"DGL version: {dgl.__version__}")
+    print(f"GPU available: {torch.cuda.is_available()}")
+
+    # Create a graph and move to GPU
+    g = dgl.graph(([0, 1, 2], [1, 2, 3]))
+    g = g.to('cuda')
+    print(f"Graph device: {g.device}")
+    ```
+  </Tab>
+</Tabs>
+
+## Real-world examples
+
+### Training Inception V3 with PyTorch
+
+This example trains Inception V3 on a custom image dataset using the ROCm PyTorch Docker image.
+
+<Steps>
+  <Step title="Start the PyTorch container">
+    ```bash
+    docker pull rocm/pytorch:latest
+    docker run -it \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      --ipc=host \
+      --shm-size 8G \
+      rocm/pytorch:latest
+    ```
+  </Step>
+
+  <Step title="Import dependencies and configure training">
+    ```python
+    import torch
+    import os
+    import torchvision
+    from torchvision import transforms
+    from torchvision.transforms.functional import InterpolationMode
+
+    # In PyTorch, 'cuda' is a generic keyword for a GPU (maps to ROCm on AMD)
+    device = "cuda"
+    data_path = "tiny-imagenet-200"
+    train_crop_size = 299
+    batch_size = 32
+    num_workers = 16
+    learning_rate = 0.1
+    momentum = 0.9
+    weight_decay = 1e-4
+    epochs = 90
+    ```
+  </Step>
+
+  <Step title="Set up data loaders">
+    ```python
+    interpolation = InterpolationMode("bilinear")
+
+    TRAIN_TRANSFORM_IMG = transforms.Compose([
+        transforms.RandomResizedCrop(train_crop_size, interpolation=interpolation),
+        transforms.PILToTensor(),
+        transforms.ConvertImageDtype(torch.float),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    dataset = torchvision.datasets.ImageFolder(
+        os.path.join(data_path, "train"),
+        transform=TRAIN_TRANSFORM_IMG
+    )
+
+    data_loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        sampler=torch.utils.data.RandomSampler(dataset),
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    ```
+  </Step>
+
+  <Step title="Build the model and training loop">
+    ```python
+    model = torchvision.models.inception_v3(pretrained=True)
+    # Adapt output layer for the target dataset's number of classes
+    model.fc = torch.nn.Linear(model.fc.in_features, len(dataset.classes))
+    model.aux_logits = False
+    model.AuxLogits = None
+    model.to(device)
+
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=learning_rate,
+        momentum=momentum,
+        weight_decay=weight_decay
+    )
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+
+    for epoch in range(epochs):
+        model.train()
+        for step, (image, target) in enumerate(data_loader):
+            image, target = image.to(device), target.to(device)
+            output = model(image)
+            loss = criterion(output, target)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        lr_scheduler.step()
+
+    torch.save(model.state_dict(), "trained_inception_v3.pt")
+    ```
+  </Step>
+</Steps>
+
+### Image classification with TensorFlow
+
+This example trains a neural network on the Fashion-MNIST dataset using TensorFlow and ROCm.
+
+```python
+import tensorflow as tf
+import numpy as np
+
+# Load Fashion-MNIST dataset
+fashion_mnist = tf.keras.datasets.fashion_mnist
+(train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
+
+class_names = [
+    'T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
+    'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot'
+]
+
+# Normalize pixel values to [0, 1]
+train_images = train_images / 255.0
+test_images = test_images / 255.0
+
+# Build the model
+model = tf.keras.Sequential([
+    tf.keras.layers.Flatten(input_shape=(28, 28)),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(10)
+])
+
+model.compile(
+    optimizer='adam',
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    metrics=['accuracy']
+)
+
+# Train for 10 epochs — GPU is used automatically
+model.fit(train_images, train_labels, epochs=10)
+
+# Evaluate
+test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)
+print(f'\nTest accuracy: {test_acc:.4f}')
+```
+
+## Installation command reference
+
+<CodeGroup>
+  ```bash PyTorch (Docker)
+  docker pull rocm/pytorch:latest
+  docker run -it \
+    --device=/dev/kfd --device=/dev/dri \
+    --group-add video --ipc=host --shm-size 8G \
+    rocm/pytorch:latest
+  ```
+
+  ```bash PyTorch (pip)
+  pip install torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/rocm6.2
+  ```
+
+  ```bash TensorFlow (Docker)
+  docker pull rocm/tensorflow:latest
+  docker run -it \
+    --device=/dev/kfd --device=/dev/dri \
+    --group-add video --ipc=host --shm-size 8G \
+    rocm/tensorflow:latest
+  ```
+
+  ```bash TensorFlow (pip)
+  pip install tensorflow-rocm
+  ```
+
+  ```bash JAX (Docker)
+  docker pull rocm/jax:latest
+  docker run -it \
+    --device=/dev/kfd --device=/dev/dri \
+    --group-add video --ipc=host \
+    rocm/jax:latest
+  ```
+</CodeGroup>
+
+## Troubleshooting common issues
+
+<AccordionGroup>
+  <Accordion title="torch.cuda.is_available() returns False">
+    This usually means the GPU devices are not passed to the Docker container or the user is not in the `video` group on the host.
+
+    **Check device access:**
+
+    ```bash
+    ls -la /dev/kfd /dev/dri/render*
+    # You should see files like /dev/dri/renderD128
+
+    # Check group membership
+    groups $USER
+    # Should include 'video' and 'render'
+    ```
+
+    **Add user to required groups (host):**
+
+    ```bash
+    sudo usermod -a -G video,render $USER
+    # Log out and back in for group changes to take effect
+    ```
+
+    **Ensure Docker run includes device flags:**
+
+    ```bash
+    docker run -it \
+      --device=/dev/kfd \
+      --device=/dev/dri \
+      --group-add video \
+      rocm/pytorch:latest
+    ```
+  </Accordion>
+
+  <Accordion title="CUDA/HIP kernel errors or illegal memory access">
+    These errors often indicate a version mismatch between the ROCm runtime and the framework build.
+
+    ```bash
+    # Check ROCm runtime version
+    cat /opt/rocm/.info/version
+
+    # Check PyTorch ROCm version
+    python -c "import torch; print(torch.version.hip)"
+    ```
+
+    The ROCm version in `torch.version.hip` should match the installed ROCm version. If not, reinstall PyTorch with the correct ROCm wheel or use the matching Docker image.
+  </Accordion>
+
+  <Accordion title="Out-of-memory (OOM) errors during training">
+    Reduce memory pressure with these strategies:
+
+    ```python
+    # 1. Use gradient checkpointing to trade compute for memory
+    model.gradient_checkpointing_enable()
+
+    # 2. Use mixed precision to halve activation memory
+    from torch.cuda.amp import autocast
+    with autocast():
+        output = model(input)
+
+    # 3. Reduce batch size
+    batch_size = 8  # try smaller values
+
+    # 4. Check current GPU memory usage
+    import torch
+    print(torch.cuda.memory_summary(device=0, abbreviated=True))
+    ```
+  </Accordion>
+
+  <Accordion title="Slow performance compared to NVIDIA">
+    Ensure you are using ROCm-optimized ops. Key steps:
+
+    ```python
+    # Enable flash attention for transformers (if supported)
+    import os
+    os.environ["ROCM_USE_FLASH_ATTN_V2_TRITON"] = "1"
+
+    # Use torch.compile for kernel fusion (PyTorch 2.x)
+    model = torch.compile(model)
+
+    # Verify GPU clocks are set to high-performance mode
+    # (run on host, not in container)
+    # sudo rocm-smi --setperflevel high
+    ```
+
+    Also confirm the model is actually running on GPU and not falling back to CPU:
+
+    ```python
+    # Check where your model parameters live
+    print(next(model.parameters()).device)  # should be 'cuda:0'
+    ```
+  </Accordion>
+
+  <Accordion title="TensorFlow cannot find GPU">
+    ```python
+    import tensorflow as tf
+
+    # Check physical GPU devices
+    gpus = tf.config.list_physical_devices('GPU')
+    print(f"Number of GPUs: {len(gpus)}")
+
+    # Enable memory growth to avoid pre-allocating all GPU memory
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+    ```
+
+    If `list_physical_devices('GPU')` returns an empty list, verify that `tensorflow-rocm` is installed (not `tensorflow`) and that the ROCm version matches.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,381 @@
+---
+title: "System optimization"
+description: "Optimize your system for maximum ROCm GPU performance"
+---
+
+This guide outlines system setup and tuning suggestions for AMD hardware to optimize performance for specific types of workloads. Proper system configuration can have a significant impact on sustained GPU performance, especially for large AI training and HPC workloads.
+
+AMD provides hardware-specific tuning guides for each GPU family:
+
+- **AMD RDNA 3.5 (Strix Halo / Ryzen AI MAX)** — covered in this guide
+- **AMD RDNA 2 (Radeon PRO W6000, V620)** — covered in this guide
+- [AMD Instinct MI300X system optimization](https://instinct.docs.amd.com/projects/amdgpu-docs/en/latest/system-optimization/mi300x.html)
+- [AMD Instinct MI300A system optimization](https://instinct.docs.amd.com/projects/amdgpu-docs/en/latest/system-optimization/mi300a.html)
+- [AMD Instinct MI200 system optimization](https://instinct.docs.amd.com/projects/amdgpu-docs/en/latest/system-optimization/mi200.html)
+
+## NUMA topology and memory settings
+
+<AccordionGroup>
+  <Accordion title="Disable NUMA auto-balancing">
+    NUMA auto-balancing can cause the kernel to migrate GPU-adjacent memory between NUMA nodes during workloads, creating unwanted latency spikes. Disable it before running AI training or HPC workloads:
+
+    ```bash
+    # Disable NUMA auto-balancing (persists until reboot)
+    sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'
+
+    # Verify
+    cat /proc/sys/kernel/numa_balancing
+    # Should output: 0
+    ```
+
+    To make this permanent, add the kernel parameter `numa_balancing=disable` to your bootloader configuration.
+  </Accordion>
+
+  <Accordion title="Set CPU affinity with numactl">
+    On multi-socket systems, matching CPU affinity to the NUMA node closest to the GPU reduces cross-socket memory traffic. Inspect the NUMA/GPU topology first:
+
+    ```bash
+    rocm-smi --showtopo
+    numactl --hardware
+    ```
+
+    Then bind workloads to the appropriate NUMA node:
+
+    ```bash
+    # Bind a process to NUMA node 0 (CPUs and memory)
+    numactl --cpunodebind=0 --membind=0 ./my_hpc_app
+
+    # For MPI workloads, bind each rank to its closest NUMA node
+    mpirun -np 8 --map-by socket numactl --localalloc ./my_hpc_app
+    ```
+  </Accordion>
+
+  <Accordion title="Transparent huge pages">
+    Enabling transparent huge pages (THP) reduces TLB pressure for applications that allocate large contiguous memory regions (common in deep learning frameworks):
+
+    ```bash
+    # Enable THP
+    echo always | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+
+    # Verify
+    cat /sys/kernel/mm/transparent_hugepage/enabled
+    # Should show: [always] madvise never
+    ```
+
+    To make this persistent, add to `/etc/rc.local` or use a systemd service.
+  </Accordion>
+</AccordionGroup>
+
+## GPU clock and power settings
+
+<AccordionGroup>
+  <Accordion title="Set high-performance power profile with rocm-smi">
+    By default, GPUs may operate in an auto power profile that throttles clocks under sustained load. Set a high-performance profile for consistent throughput:
+
+    ```bash
+    # List available performance levels
+    rocm-smi --showperflevel
+
+    # Set all GPUs to high-performance mode
+    sudo rocm-smi --setperflevel high
+
+    # Verify current clock speeds
+    rocm-smi --showclocks
+    ```
+
+    For workloads with variable GPU utilization, the `auto` profile may be preferable to reduce power consumption during idle periods.
+  </Accordion>
+
+  <Accordion title="Set GPU power cap">
+    You can set a maximum power cap per GPU to prevent thermal throttling in thermally constrained environments:
+
+    ```bash
+    # Show current power usage and limits
+    rocm-smi --showpower
+
+    # Set a 500W power cap on GPU 0
+    sudo rocm-smi --setpoweroverdrive 500 --device 0
+
+    # Apply to all GPUs
+    sudo rocm-smi --setpoweroverdrive 500
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor GPU temperature and fan speed">
+    Keep an eye on GPU temperature during sustained workloads. Throttling occurs when the GPU exceeds its thermal design point:
+
+    ```bash
+    # Show GPU temperature
+    rocm-smi --showtemp
+
+    # Continuous monitoring (update every 2 seconds)
+    watch -n 2 rocm-smi
+
+    # Show full GPU status
+    rocm-smi --showallinfo
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## PCIe and BAR memory settings
+
+<AccordionGroup>
+  <Accordion title="Enable large BAR (resizable BAR / Above 4G decoding)">
+    Resizable BAR (also known as Above 4G Decoding or Smart Access Memory) allows the CPU to access the entire GPU framebuffer over PCIe, which can significantly improve performance for workloads that frequently transfer data between CPU and GPU.
+
+    Enable these settings in the system BIOS:
+
+    - **Above 4G Decoding**: Enabled
+    - **Re-Size BAR Support**: Enabled (or Auto)
+    - **SR-IOV**: Enabled (if using GPU virtualization)
+
+    Verify that BAR is active after enabling:
+
+    ```bash
+    # Check BAR size for your GPU (should show large value, e.g., 64G)
+    sudo lspci -vvv | grep -A 20 "AMD/ATI" | grep "Memory at"
+    ```
+  </Accordion>
+
+  <Accordion title="PCIe link speed verification">
+    Verify that your GPUs are running at the expected PCIe link speed (Gen4 x16 or Gen5 x16 for AMD Instinct):
+
+    ```bash
+    # Check PCIe link speed and width
+    sudo lspci -vvv | grep -A 5 "LnkSta:"
+
+    # Use rocm-smi
+    rocm-smi --showpciebw
+    ```
+
+    If the link is running at a lower speed than expected, check BIOS settings for PCIe generation settings and ensure physical slot compatibility.
+  </Accordion>
+</AccordionGroup>
+
+## AMD RDNA 3.5 (Strix Halo / Ryzen AI MAX)
+
+Strix Halo APUs combine high-performance CPU cores with integrated RDNA 3.5 graphics and support up to 128 GB of unified LPDDR5X-8000 memory. They are well-suited for LLM development, AI inference, high-performance workstations, and virtualization hosts.
+
+<AccordionGroup>
+  <Accordion title="Unified memory architecture on Strix Halo">
+    On Strix Halo, memory is physically shared between the CPU and GPU — there is no discrete VRAM pool. The GPU uses two types of mappings:
+
+    - **GART** — maps system RAM into the kernel driver's GPU virtual address space. Kept small; used for driver-internal operations.
+    - **GTT (Graphics Translation Table)** — maps system RAM into GPU virtual address spaces for user processes (PyTorch, AI workloads). Dynamic and reclaimed when not in use. Default limit is ~50% of system RAM.
+
+    AI frameworks prefer GTT-backed allocations because they allow large, flexible mappings without permanently reserving memory.
+
+    <Note>
+      AMD recommends keeping the dedicated VRAM reservation in BIOS small (for example 0.5 GB) and increasing the shared GTT limit instead. Reserving large amounts of VRAM in BIOS permanently reduces available system memory with no performance benefit on unified-memory APUs.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Increase shared GPU memory limit with amd-ttm">
+    The maximum amount of shared GPU-accessible memory is controlled by the kernel TTM (Translation Table Manager) page limit, exposed at `/sys/module/ttm/parameters/pages_limit`.
+
+    Use the `amd-ttm` utility to configure this limit:
+
+    **Install the tool:**
+
+    ```bash
+    sudo apt install pipx
+    pipx ensurepath
+    pipx install amd-debug-tools
+    ```
+
+    **Check the current configuration:**
+
+    ```bash
+    amd-ttm
+    # Example output:
+    # Current TTM pages limit: 16469033 pages (62.82 GB)
+    # Total system memory: 125.65 GB
+    ```
+
+    **Set the usable shared memory (in GB):**
+
+    ```bash
+    amd-ttm --set 100
+    # Successfully set TTM pages limit to 26214400 pages (100.00 GB)
+    # Configuration written to /etc/modprobe.d/ttm.conf
+    # NOTE: You need to reboot for changes to take effect.
+    ```
+
+    **Revert to kernel defaults:**
+
+    ```bash
+    amd-ttm --clear
+    ```
+
+    Reboot after making changes for them to take effect.
+  </Accordion>
+
+  <Accordion title="Required kernel version for Strix Halo">
+    Support for Strix Halo requires specific fixes in the Linux kernel that update internal limits in the AMD KFD driver. Without these updates, GPU compute workloads may fail to initialize.
+
+    The necessary patches are included in **Linux kernel 6.18.4 and newer**.
+
+    | Distribution | Status |
+    |---|---|
+    | Ubuntu 24.04 OEM (>= 6.14.0-1018) | Stable |
+    | Ubuntu 26.04 Generic | Stable |
+    | Generic distro >= 6.18.4 | Stable |
+    | Fedora 43 | Stable (native packaging) |
+    | Arch Linux | Stable (native packaging) |
+    | Ubuntu 24.04 HWE / OEM (older) | Unstable / experimental |
+
+    Check your kernel version:
+
+    ```bash
+    uname -r
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## AMD RDNA 2 (Radeon PRO W6000 / V620)
+
+<AccordionGroup>
+  <Accordion title="BIOS settings for SR-IOV virtualization (V620)">
+    To enable SR-IOV (Single Root I/O Virtualization) for running ROCm workloads inside VMs on the V620 GPU, configure the following BIOS settings (example for ASRock platforms):
+
+    | BIOS Menu Path | Setting | Value | Purpose |
+    |---|---|---|---|
+    | Advanced / North Bridge Configuration | IOMMU | Enabled | I/O Memory Management Unit |
+    | Advanced / North Bridge Configuration | ACS Enable | Enabled | Access Control Service |
+    | Advanced / PCIe/PCI/PnP Configuration | SR-IOV Support | Enabled | Single Root I/O Virtualization |
+    | Advanced / ACPI settings | PCI AER Support | Enabled | Advanced Error Reporting |
+
+    <Warning>
+      SR-IOV is supported on the V620 GPU but is **not** supported on the W6800.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Enable IOMMU and install KVM hypervisor packages">
+    After setting the BIOS, enable IOMMU in GRUB and install KVM:
+
+    ```bash
+    # Add to /etc/default/grub:
+    # GRUB_CMDLINE_LINUX_DEFAULT="quiet splash iommu=pt amd_iommu=on"
+    sudo update-grub
+    sudo reboot
+    ```
+
+    Install KVM hypervisor packages:
+
+    ```bash
+    sudo apt-get -y install \
+      qemu-kvm qemu-utils bridge-utils virt-manager \
+      libvirt-daemon-system dnsmasq-base
+
+    # Enable default virtual network
+    sudo virsh net-start default
+    ```
+  </Accordion>
+
+  <Accordion title="Install GPU-IOV (GIM) driver and create virtual functions">
+    Install the GPU-IOV Module (GIM) driver and create virtual functions (VFs) for VM assignment:
+
+    ```bash
+    sudo dpkg -i <gim_driver_package.deb>
+    sudo reboot
+
+    # Load the GIM driver and create 1 virtual function
+    sudo modprobe gim vf_num=1
+
+    # Verify VF was created
+    lspci -d 1002:
+    # Expected output includes:
+    # 03:00.0 Display controller: AMD/ATI Device 73a1
+    # 03:02.0 Display controller: AMD/ATI Device 73ae  <- VF
+    ```
+
+    Then use `virt-manager` to assign the GPU virtual function (PCI Host Device) to a guest VM.
+  </Accordion>
+</AccordionGroup>
+
+## Workload-specific tuning (MI300X)
+
+<AccordionGroup>
+  <Accordion title="MI300X system-level settings for AI workloads">
+    For AMD Instinct MI300X GPUs, AMD publishes a comprehensive system optimization guide covering:
+
+    - BIOS settings (NUMA, IOMMU, PCIe configuration)
+    - Operating system tuning (kernel parameters, IRQ affinity, CPU governor)
+    - ROCm environment variables for memory management
+    - Network fabric (InfiniBand) configuration for multi-node training
+
+    See the [MI300X system optimization guide](https://instinct.docs.amd.com/projects/amdgpu-docs/en/latest/system-optimization/mi300x.html) for detailed instructions.
+  </Accordion>
+
+  <Accordion title="Environment variables for MI300X inference optimization">
+    These environment variables tune ROCm runtime behavior for LLM inference workloads on MI300X:
+
+    ```bash
+    # Disable SDMA (DMA engine) for low-latency small transfers
+    export HSA_ENABLE_SDMA=0
+
+    # Use unified shared memory for large model weights
+    export GPU_MAX_HW_QUEUES=8
+
+    # Set number of compute units used by HIP runtime
+    export ROCR_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+    # Enable flash attention optimized for ROCm/Triton
+    export ROCM_USE_FLASH_ATTN_V2_TRITON=1
+    ```
+  </Accordion>
+
+  <Accordion title="GEMM tuning for matrix-heavy workloads">
+    Large language model inference and training performance is dominated by GEMM (matrix multiply) operations. ROCm provides tools to profile and tune GEMM kernels for specific model shapes on your hardware.
+
+    ```bash
+    # Install rocBLAS tuning tools
+    sudo apt install rocblas
+
+    # Run GEMM benchmark for a specific size (M=4096, N=4096, K=4096)
+    /opt/rocm/bin/rocblas-bench \
+      -f gemm \
+      -r f16_r \
+      --transposeA N --transposeB T \
+      -m 4096 -n 4096 -k 4096 \
+      --alpha 1 --beta 0 \
+      --initialization trig_float \
+      --iters 100
+    ```
+
+    The [MI300X LLM workload tuning guide](https://rocm.docs.amd.com/en/latest/how-to/rocm-for-ai/inference-optimization/workload.html) covers GEMM tuning for specific model architectures.
+  </Accordion>
+</AccordionGroup>
+
+## Linux kernel parameters
+
+<AccordionGroup>
+  <Accordion title="Recommended kernel boot parameters">
+    Add these parameters to `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` for AMD GPU workloads:
+
+    ```bash
+    # Edit GRUB configuration
+    sudo nano /etc/default/grub
+
+    # Recommended parameters:
+    # iommu=pt            - pass-through mode (reduces IOMMU overhead)
+    # amd_iommu=on        - enable IOMMU for AMD CPUs
+    # numa_balancing=0    - disable NUMA auto-balancing
+    # transparent_hugepage=always  - enable THP
+
+    GRUB_CMDLINE_LINUX_DEFAULT="quiet splash iommu=pt amd_iommu=on numa_balancing=0"
+
+    sudo update-grub
+    sudo reboot
+    ```
+  </Accordion>
+
+  <Accordion title="Avoid Ethernet port renaming with GPU swaps">
+    If you frequently change GPU configurations, prevent Ethernet port renaming at boot by adding the following kernel parameters:
+
+    ```bash
+    # Add to GRUB_CMDLINE_LINUX_DEFAULT:
+    net.ifnames=0 biosdevname=0
+    ```
+  </Accordion>
+</AccordionGroup>

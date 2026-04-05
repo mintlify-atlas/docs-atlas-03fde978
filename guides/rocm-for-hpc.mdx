@@ -1,0 +1,307 @@
+---
+title: "ROCm for HPC"
+description: "Using ROCm for high-performance computing workloads"
+---
+
+The ROCm open-source software stack is optimized to extract high-performance computing (HPC) workload performance from AMD Instinct GPUs while maintaining compatibility with industry software frameworks.
+
+ROCm enhances support and access for developers by providing streamlined tools that significantly increase productivity. Being open-source, ROCm fosters innovation, differentiation, and collaboration within the developer community — making it a powerful and accessible solution for leveraging the full potential of AMD GPU capabilities in diverse computational applications.
+
+## HPC use cases on AMD GPUs
+
+AMD Instinct GPUs, powered by ROCm, are used across a broad spectrum of scientific computing domains:
+
+- **Astrophysics** — hydrodynamic simulations of astrophysical environments
+- **Climate and weather** — atmosphere, ocean, and earth-system simulations
+- **Computational chemistry** — molecular dynamics and biomolecular simulation
+- **Computational fluid dynamics** — turbulent flow, heat transfer, and multiphase systems
+- **Earth science** — seismic wave propagation and geophysical modeling
+- **Genomics** — sequence alignment and genomic data processing
+- **Molecular dynamics** — large-scale atomic/molecular particle simulation
+- **Physics** — lattice QCD, plasma physics, and particle accelerator modeling
+- **Quantum Monte Carlo** — many-body electronic structure calculations
+
+## Key HPC libraries
+
+<CardGroup cols={2}>
+  <Card title="rocBLAS" icon="calculator">
+    GPU-accelerated Basic Linear Algebra Subprograms (BLAS) — matrix multiply, dot products, and linear system operations optimized for AMD GPUs.
+  </Card>
+  <Card title="rocFFT" icon="wave-square">
+    GPU-accelerated Fast Fourier Transform library supporting complex and real transforms of arbitrary lengths.
+  </Card>
+  <Card title="rocSPARSE" icon="table-cells">
+    Sparse linear algebra routines for GPU-accelerated sparse matrix-vector multiply, SpGEMM, and sparse triangular solve.
+  </Card>
+  <Card title="RCCL" icon="network-wired">
+    ROCm Collective Communications Library — provides AllReduce, AllGather, Broadcast, and Reduce operations for multi-GPU and multi-node workloads.
+  </Card>
+  <Card title="rocSOLVER" icon="square-root-variable">
+    Dense and sparse linear solvers (LU, QR, SVD, eigenvalue) built on top of rocBLAS for GPU-accelerated matrix decompositions.
+  </Card>
+  <Card title="hipBLAS / hipFFT" icon="layer-group">
+    Portable HIP wrappers for rocBLAS and rocFFT that allow code to compile for both AMD and NVIDIA backends.
+  </Card>
+</CardGroup>
+
+## OpenMP offloading for HPC
+
+ROCm supports OpenMP target offloading, allowing Fortran and C/C++ HPC codes to run on AMD GPUs with minimal code changes. The LLVM-based `amdclang` and `amdflang` compilers ship with ROCm and support the full OpenMP 5.x offloading specification.
+
+### Compiling an OpenMP offload program
+
+```bash
+# Compile a C++ program with OpenMP GPU offload for AMD gfx90a (MI250X)
+amdclang++ -fopenmp -fopenmp-targets=amdgcn-amd-amdhsa \
+  -Xopenmp-target=amdgcn-amd-amdhsa -march=gfx90a \
+  -o my_hpc_app my_hpc_app.cpp
+```
+
+### Example: OpenMP offload kernel
+
+```cpp
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    const int N = 1 << 20;
+    double *a = new double[N];
+    double *b = new double[N];
+    double *c = new double[N];
+
+    // Initialize arrays on CPU
+    for (int i = 0; i < N; i++) {
+        a[i] = 1.0;
+        b[i] = 2.0;
+    }
+
+    // Offload computation to GPU
+    #pragma omp target teams distribute parallel for \
+        map(to: a[0:N], b[0:N]) map(from: c[0:N])
+    for (int i = 0; i < N; i++) {
+        c[i] = a[i] + b[i];
+    }
+
+    printf("c[0] = %f\n", c[0]); // should be 3.0
+    return 0;
+}
+```
+
+### Verifying GPU offload is active
+
+```bash
+# Set environment variable to print offload device info
+export OMP_TARGET_OFFLOAD=MANDATORY
+export LIBOMPTARGET_INFO=1
+
+./my_hpc_app
+```
+
+<Tip>
+  Use `LIBOMPTARGET_PLUGIN_PROFILE=T` to print per-kernel timing information for OpenMP offloaded regions. This helps identify GPU utilization bottlenecks.
+</Tip>
+
+## MPI + ROCm for multi-GPU and multi-node workloads
+
+Large HPC applications scale across multiple GPUs and nodes using MPI (Message Passing Interface) in combination with ROCm. AMD provides prebuilt Docker containers with GPU-aware MPI configured out of the box.
+
+### GPU-aware MPI with OpenMPI
+
+GPU-aware MPI allows direct buffer passing between GPU memory and the MPI library, avoiding host staging:
+
+```bash
+# Build a GPU-aware MPI application
+mpicc -o mpi_gpu_app mpi_gpu_app.c \
+  -I/opt/rocm/include \
+  -L/opt/rocm/lib \
+  -lhip_hcc
+
+# Run across 4 nodes with 8 GPUs each
+mpirun -np 32 \
+  --map-by ppr:8:node \
+  --mca pml ucx \
+  -x UCX_TLS=rocm_copy,rocm_ipc,tcp \
+  ./mpi_gpu_app
+```
+
+### Using the AMD ROCm + OpenMPI container
+
+AMD provides a prebuilt container for GPU-aware MPI workloads:
+
+```bash
+docker pull amdih/base-gpu-mpi-rocm-docker:latest
+
+docker run --rm \
+  --device=/dev/kfd \
+  --device=/dev/dri \
+  --group-add video \
+  --security-opt seccomp=unconfined \
+  --cap-add=SYS_PTRACE \
+  amdih/base-gpu-mpi-rocm-docker:latest \
+  mpirun -np 8 ./my_hpc_app
+```
+
+### RCCL for collective communication
+
+RCCL provides AllReduce, AllGather, Broadcast, ReduceScatter, and other collectives optimized for AMD GPU interconnects (including NVLink-equivalent AMD Infinity Fabric):
+
+```cpp
+#include <rccl/rccl.h>
+
+ncclComm_t comm;
+int nDev = 8;
+int devList[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+ncclCommInitAll(&comm, nDev, devList);
+
+// AllReduce across 8 GPUs
+ncclAllReduce(sendbuff, recvbuff, count,
+              ncclFloat, ncclSum, comm, stream);
+```
+
+## Performance portability: Kokkos and RAJA
+
+For HPC applications requiring portability across GPU vendors, ROCm supports both Kokkos and RAJA:
+
+<Tabs>
+  <Tab title="Kokkos">
+    Kokkos is a C++ programming model for writing performance-portable HPC applications. It abstracts parallel execution and data management across CUDA, HIP, OpenMP, and SYCL backends.
+
+    ```cpp
+    #include <Kokkos_Core.hpp>
+
+    int main(int argc, char* argv[]) {
+        Kokkos::initialize(argc, argv);
+        {
+            const int N = 1000000;
+            Kokkos::View<double*> a("a", N);
+            Kokkos::View<double*> b("b", N);
+            Kokkos::View<double*> c("c", N);
+
+            Kokkos::parallel_for("VecAdd", N, KOKKOS_LAMBDA(int i) {
+                c(i) = a(i) + b(i);
+            });
+            Kokkos::fence();
+        }
+        Kokkos::finalize();
+        return 0;
+    }
+    ```
+
+    Build for AMD GPUs with the HIP backend:
+
+    ```bash
+    cmake -DKokkos_ENABLE_HIP=ON \
+          -DKokkos_ARCH_VEGA90A=ON \
+          -DCMAKE_CXX_COMPILER=hipcc \
+          ..
+    ```
+  </Tab>
+  <Tab title="RAJA">
+    RAJA is a library of C++ software abstractions developed at Lawrence Livermore National Laboratory (LLNL) that enables architecture and programming model portability for HPC applications.
+
+    ```cpp
+    #include "RAJA/RAJA.hpp"
+
+    using HIP_EXEC = RAJA::hip_exec<256>;
+
+    int main() {
+        const int N = 1000000;
+        double *a, *b, *c;
+        hipMalloc(&a, N * sizeof(double));
+        hipMalloc(&b, N * sizeof(double));
+        hipMalloc(&c, N * sizeof(double));
+
+        RAJA::forall<HIP_EXEC>(RAJA::RangeSegment(0, N),
+            [=] RAJA_DEVICE (int i) {
+                c[i] = a[i] + b[i];
+            }
+        );
+        return 0;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Supported HPC applications
+
+The following applications have been validated on AMD Instinct GPUs via the AMD InfinityHub container library. Each provides a prebuilt Docker container with optimized parameters.
+
+| Domain | Application | Description |
+|---|---|---|
+| Physics | [Chroma](https://github.com/amd/InfinityHub-CI/tree/main/chroma/) | Lattice field theory and lattice QCD using the SciDAC QDP++ data-parallel framework |
+| Physics | [Grid](https://github.com/amd/InfinityHub-CI/tree/main/grid/) | High-level data-parallel lattice QCD with MPI, OpenMP, and GPU offloading |
+| Physics | [MILC](https://github.com/amd/InfinityHub-CI/tree/main/milc/) | SU(3) lattice gauge theory on MIMD parallel machines |
+| Physics | [QUDA](https://github.com/amd/InfinityHub-CI/tree/main/quda) | Efficient lattice QCD computations with optimized Dirac operators |
+| Physics | [PIConGPU](https://github.com/amd/InfinityHub-CI/tree/main/picongpu) | Particle-in-cell simulations for plasma physics and laser-plasma interactions |
+| Astrophysics | [Cholla](https://github.com/amd/InfinityHub-CI/tree/main/cholla/) | Astrophysical hydrodynamic simulations |
+| Geophysics | [SPECFEM3D Cartesian](https://github.com/amd/InfinityHub-CI/tree/main/specfem3d) | Seismic wave propagation in geophysical and engineering models |
+| Molecular dynamics | [GROMACS](https://github.com/amd/InfinityHub-CI/tree/main/gromacs) | Newtonian molecular dynamics for systems of hundreds to millions of particles |
+| Molecular dynamics | [LAMMPS](https://github.com/amd/InfinityHub-CI/tree/main/lammps) | Large-scale atomic/molecular massively parallel simulator |
+| Molecular dynamics | [Amber](https://github.com/amd/InfinityHub-CI/tree/main/amber) | Biomolecular simulation with molecular mechanical force fields |
+| Fluid dynamics | [Ansys Fluent](https://github.com/amd/InfinityHub-CI/tree/main/ansys-fluent) | CFD simulation of fluid flow, heat transfer, and turbulence |
+| Fluid dynamics | [NEKO](https://github.com/amd/InfinityHub-CI/tree/main/neko) | Portable high-order spectral element flow simulations in modern Fortran |
+| Quantum Monte Carlo | [QMCPACK](https://github.com/amd/InfinityHub-CI/tree/main/qmcpack) | Many-body ab initio QMC for electronic structure of atoms, molecules, and solids |
+| Climate and weather | [MPAS](https://github.com/amd/InfinityHub-CI/tree/main/mpas) | Model for Prediction Across Scales — atmosphere, ocean, and earth-system simulations |
+| Energy / Oil & Gas | [DevitoPRO](https://github.com/amd/InfinityHub-CI/tree/main/devitopro) | Optimized finite difference computations for seismic imaging and inversion |
+
+## Benchmarks
+
+| Benchmark | Description |
+|---|---|
+| [rocHPL](https://github.com/amd/InfinityHub-CI/tree/main/rochpl) | High Performance LINPACK — solves a random linear system and reports FLOP/s |
+| [rocHPL-MxP](https://github.com/amd/InfinityHub-CI/tree/main/hpl-mxp) | Mixed-precision LINPACK highlighting convergence of HPC and AI workloads |
+| [HPCG](https://github.com/amd/InfinityHub-CI/tree/main/hpcg) | High Performance Conjugate Gradient — complements HPL with sparse computation patterns |
+
+## Performance considerations
+
+<AccordionGroup>
+  <Accordion title="NUMA topology and CPU affinity">
+    On multi-socket systems, matching CPU NUMA node affinity to GPU PCIe topology reduces memory access latency. Use `numactl` to bind MPI ranks to the NUMA node closest to their GPU:
+
+    ```bash
+    numactl --cpunodebind=0 --membind=0 mpirun -np 4 ./app
+    ```
+
+    Check the NUMA/GPU topology:
+
+    ```bash
+    rocm-smi --showtopo
+    ```
+  </Accordion>
+
+  <Accordion title="GPU clock and power settings">
+    For sustained HPC workloads, set GPUs to a fixed high-performance power profile to prevent clock throttling:
+
+    ```bash
+    # Set compute mode (all GPUs)
+    sudo rocm-smi --setperflevel high
+
+    # Or set a specific power cap (in Watts)
+    sudo rocm-smi --setpoweroverdrive 500 --device 0
+    ```
+  </Accordion>
+
+  <Accordion title="Huge pages for MPI communication buffers">
+    Enable transparent huge pages to reduce TLB pressure for large MPI communication buffers:
+
+    ```bash
+    echo always | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
+    ```
+  </Accordion>
+
+  <Accordion title="GPU-direct RDMA for InfiniBand">
+    For InfiniBand-connected clusters, enable GPU-direct RDMA to allow the NIC to transfer data directly from/to GPU memory, bypassing the CPU:
+
+    ```bash
+    # Verify GPU-direct RDMA is enabled
+    cat /sys/module/amdkfd/parameters/hmmapping
+
+    # Set UCX to use ROCm RDMA transport
+    export UCX_TLS=rocm_copy,rocm_ipc,rc_verbs
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  For AI applications on ROCm, see the [ROCm for AI guide](/guides/rocm-for-ai). ROCm supports both HPC and AI workloads on the same hardware and software stack.
+</Note>

@@ -1,0 +1,209 @@
+---
+title: "What is ROCm?"
+description: "An overview of the AMD ROCm open-source GPU compute platform — its software stack, components, programming models, and supported hardware."
+keywords: ["ROCm", "AMD", "GPU compute", "HIP", "OpenCL", "OpenMP", "CDNA", "RDNA", "open source"]
+---
+
+ROCm is an open-source software stack designed for GPU computation. It provides the full set of tools required to program AMD GPUs — from low-level kernel drivers to high-level end-user applications.
+
+ROCm consists of drivers, development tools, and APIs that enable GPU programming across the entire stack. It is particularly well-suited to GPU-accelerated high-performance computing (HPC), artificial intelligence (AI), scientific computing, and computer-aided design (CAD).
+
+<Note>
+  A new open-source build platform for ROCm is under active development at [TheRock](https://github.com/ROCm/TheRock). TheRock features a unified CMake build with bundled dependencies and adds Microsoft Windows support. It is not yet a replacement for the standard ROCm distribution.
+</Note>
+
+## The ROCm software stack
+
+ROCm is layered from the hardware interface up through high-level framework integrations:
+
+- **Hardware layer** — AMD CDNA and RDNA GPU architectures
+- **Runtime layer** — ROCR Runtime, HIP runtime, and OpenCL/OpenMP runtimes
+- **Compiler layer** — ROCm LLVM, HIPCC, FLANG
+- **Library layer** — Math, ML/CV, communication, and primitive libraries
+- **Tools layer** — Profilers, debuggers, and system management utilities
+- **Framework layer** — PyTorch, TensorFlow, and other ML frameworks via ROCm backends
+
+ROCm is powered by [HIP](https://github.com/ROCm/rocm-systems/tree/develop/projects/hip), a C++ runtime API and kernel language for AMD GPUs. HIP provides a programming interface similar to NVIDIA CUDA, allowing developers to write portable GPU code that runs on both AMD and NVIDIA hardware.
+
+## Programming models
+
+ROCm supports three primary GPU programming models:
+
+| Model | Description |
+|---|---|
+| **HIP** | C++ runtime API and kernel language. CUDA-like syntax for portable GPU code. The primary programming model for ROCm. |
+| **OpenCL** | Open standard for heterogeneous parallel programming across CPUs, GPUs, and other processors. |
+| **OpenMP** | Directive-based parallel programming model with GPU offloading support via target pragmas. |
+
+## Supported GPU architectures
+
+| Architecture family | Series | Use case |
+|---|---|---|
+| CDNA4 | Instinct MI350 | Data center AI and HPC |
+| CDNA3 | Instinct MI300 series | Data center AI and HPC |
+| CDNA2 | Instinct MI200 series | Data center HPC |
+| CDNA1 | Instinct MI100 | Data center HPC |
+| RDNA4 | Radeon RX 9000 series | Workstation and desktop |
+| RDNA3 | Radeon RX 7000 series | Workstation and desktop |
+
+For the full list of supported GPUs per ROCm version, see the [compatibility matrix](/reference/compatibility-matrix).
+
+## ROCm components
+
+ROCm is composed of modular open-source components organized into libraries, tools, compilers, and runtime.
+
+### Libraries
+
+<CardGroup cols={2}>
+  <Card title="Math libraries" icon="calculator" href="/reference/libraries">
+    BLAS, FFT, RAND, SOLVER, SPARSE, and tensor operations for scientific computing and AI workloads.
+    Includes rocBLAS, hipBLAS, hipBLASLt, rocFFT, hipFFT, rocRAND, hipRAND, rocSOLVER, hipSOLVER, rocSPARSE, hipSPARSE, rocWMMA, hipTensor, rocALUTION, and Tensile.
+  </Card>
+  <Card title="ML and computer vision" icon="brain" href="/reference/libraries">
+    Deep learning primitives, graph inference, and computer vision for AI model training and inference.
+    Includes MIOpen, MIGraphX, Composable Kernel, MIVisionX, RPP, rocAL, rocDecode, rocJPEG, and rocPyDecode.
+  </Card>
+  <Card title="Communication libraries" icon="network-wired" href="/reference/libraries">
+    Multi-GPU and multi-node collective communication for distributed training and HPC.
+    Includes RCCL (multi-GPU collectives) and rocSHMEM (intra-kernel GPU networking via OpenSHMEM interface).
+  </Card>
+  <Card title="Primitive libraries" icon="cubes" href="/reference/libraries">
+    Parallel algorithms and low-level GPU primitives as building blocks for higher-level libraries.
+    Includes rocPRIM, rocThrust, hipCUB, and hipTensor.
+  </Card>
+</CardGroup>
+
+#### Math libraries — component details
+
+| Component | Description |
+|---|---|
+| rocBLAS / hipBLAS | BLAS implementation in HIP; hipBLAS marshals between rocBLAS and cuBLAS backends |
+| hipBLASLt | General matrix-matrix operations with flexible API, extending standard BLAS |
+| rocFFT / hipFFT | Fast Fourier transforms in HIP; hipFFT supports rocFFT and cuFFT backends |
+| rocRAND / hipRAND | Pseudorandom and quasirandom number generation |
+| rocSOLVER / hipSOLVER | LAPACK routines on ROCm; hipSOLVER marshals rocSOLVER and cuSOLVER backends |
+| rocSPARSE / hipSPARSE | BLAS for sparse computation; hipSPARSE supports rocSPARSE and cuSPARSE backends |
+| rocWMMA | Mixed-precision matrix multiply-accumulate (MMA) acceleration |
+| rocALUTION | Sparse linear algebra with fine-grained parallelism on ROCm |
+| Tensile | Benchmark-driven backend for GEMMs and N-dimensional tensor contractions |
+
+#### ML and computer vision — component details
+
+| Component | Description |
+|---|---|
+| MIOpen | Open-source deep learning library (convolutions, batch norm, pooling, and more) |
+| MIGraphX | Graph inference engine that accelerates ML model inference |
+| Composable Kernel | Performance-critical kernels for ML workloads across multiple architectures |
+| MIVisionX | Computer vision and ML utilities and applications |
+| ROCm Performance Primitives (RPP) | High-performance computer vision with HIP/OpenCL/CPU backends |
+| rocAL | Image and video augmentation and decoding library |
+| rocDecode | Hardware-accelerated video decoding on AMD GPUs |
+| rocJPEG | GPU-accelerated JPEG image decoding |
+
+#### Communication — component details
+
+| Component | Description |
+|---|---|
+| RCCL | Multi-GPU and multi-node collective communication primitives (AllReduce, Broadcast, etc.) |
+| rocSHMEM | Intra-kernel networking library with OpenSHMEM-like interface for GPU-centric communication |
+
+#### Primitive libraries — component details
+
+| Component | Description |
+|---|---|
+| rocPRIM | Header-only library for HIP parallel primitives |
+| rocThrust | Parallel algorithm library (Thrust-compatible API) |
+| hipCUB | Thin wrapper over rocPRIM or CUB for porting CUB-based CUDA code to HIP |
+| hipTensor | C++ library for accelerating tensor primitives using Composable Kernel |
+
+---
+
+### Tools
+
+<CardGroup cols={2}>
+  <Card title="System management" icon="server" href="/reference/tools-and-compilers">
+    Monitor and control GPU settings, performance, and health in data center and workstation environments.
+    Includes AMD SMI, rocminfo, ROCm SMI, ROCm Data Center Tool, and ROCm Validation Suite.
+  </Card>
+  <Card title="Profiling tools" icon="chart-line" href="/reference/tools-and-compilers">
+    Kernel-level and system-level profiling and tracing for HPC and ML workloads.
+    Includes ROCprofiler-SDK, ROCm Compute Profiler, ROCm Systems Profiler, ROCProfiler, and ROCTracer.
+  </Card>
+  <Card title="Development tools" icon="wrench" href="/reference/tools-and-compilers">
+    Source-level debugging and build tooling for GPU applications.
+    Includes ROCgdb (source-level debugger based on GDB), ROCdbgapi, HIPIFY, and ROCm CMake.
+  </Card>
+  <Card title="Compilers" icon="code" href="/reference/tools-and-compilers">
+    Compiler toolchain for HIP, OpenCL, OpenMP, and Fortran on AMD GPUs.
+    Includes ROCm LLVM, HIPCC compiler driver, and FLANG (Fortran).
+  </Card>
+</CardGroup>
+
+#### System management — component details
+
+| Component | Description |
+|---|---|
+| AMD SMI | System management interface for GPU settings, performance monitoring, and device info |
+| rocminfo | Reports system and GPU topology information |
+| ROCm SMI | C library providing user-space interface for GPU monitoring and control |
+| ROCm Data Center Tool | Simplifies AMD GPU administration in cluster and data-center environments |
+| ROCm Validation Suite | Detects and troubleshoots common GPU problems in HPC environments |
+
+#### Profiling tools — component details
+
+| Component | Description |
+|---|---|
+| ROCprofiler-SDK | Toolkit for building analysis tools for GPU profiling and tracing (beta) |
+| ROCm Compute Profiler | Kernel-level profiling for ML and HPC workloads |
+| ROCm Systems Profiler | Comprehensive CPU and GPU application tracing |
+| ROCTracer | Runtime API interception and async activity tracing |
+| ROCm Bandwidth Test | Benchmarks buffer copy and kernel read/write performance |
+
+#### Development tools — component details
+
+| Component | Description |
+|---|---|
+| ROCm Debugger (ROCgdb) | Source-level debugger for Linux based on GNU GDB |
+| ROCdbgapi | ROCm debugger API library |
+| HIPIFY | Translates CUDA source code to portable HIP C++ |
+| ROCm CMake | Collection of CMake modules for building ROCm projects |
+
+---
+
+### Compilers and runtime
+
+| Component | Description |
+|---|---|
+| ROCm LLVM | ROCm LLVM compiler infrastructure (Clang-based) |
+| HIPCC | Compiler driver that calls Clang with the appropriate HIP include and library options |
+| FLANG | Out-of-tree Fortran compiler targeting LLVM |
+| HIP | C++ runtime API and kernel language for AMD GPUs |
+| ROCR Runtime | ROCm user-space runtime (HSA-based) |
+
+## Framework integrations
+
+ROCm is fully integrated into major ML frameworks. You can use AMD GPUs with the frameworks you already know:
+
+- **PyTorch** — ROCm backend via `torch` with `rocm` device support
+- **TensorFlow** — ROCm-enabled TensorFlow builds
+- **JAX** — Experimental ROCm support
+- **ONNX Runtime** — ROCm execution provider
+
+See the [deep learning frameworks guide](/guides/deep-learning-frameworks) to get started.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Install ROCm on Linux and verify your GPU is detected.
+  </Card>
+  <Card title="Programming models" icon="code" href="/concepts/programming-models">
+    Learn how to write GPU code with HIP, OpenCL, and OpenMP.
+  </Card>
+  <Card title="ROCm for AI" icon="brain" href="/guides/rocm-for-ai">
+    Run PyTorch and TensorFlow on AMD GPUs.
+  </Card>
+  <Card title="ROCm for HPC" icon="microchip" href="/guides/rocm-for-hpc">
+    Accelerate scientific computing and simulation workloads.
+  </Card>
+</CardGroup>

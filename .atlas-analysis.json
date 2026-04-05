@@ -1,0 +1,90 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "AMD ROCm",
+  "projectDescription": "An open-source GPU compute stack providing drivers, compilers, libraries, and tools for AMD GPU programming from low-level kernels to high-level AI/HPC applications.",
+  "theme": "aspen",
+  "primaryColor": "#040404",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "what-is-rocm",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/gpu-architecture",
+              "concepts/programming-models",
+              "concepts/file-structure"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/rocm-for-ai",
+              "guides/rocm-for-hpc",
+              "guides/deep-learning-frameworks",
+              "guides/system-optimization",
+              "guides/system-debugging"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/libraries",
+              "reference/tools-and-compilers",
+              "reference/gpu-specs",
+              "reference/environment-variables",
+              "reference/compatibility-matrix",
+              "reference/glossary"
+            ]
+          },
+          {
+            "group": "Release Notes",
+            "pages": [
+              "release/release-notes",
+              "release/version-history"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "HIP C++ runtime API and kernel language for portable GPU programming",
+    "Comprehensive math libraries (BLAS, FFT, RAND, SOLVER, SPARSE)",
+    "ML/AI acceleration with MIOpen, MIGraphX, Composable Kernel",
+    "Multi-GPU collective communication via RCCL",
+    "GPU profiling and tracing tools (ROCProfiler SDK, ROCm Compute Profiler)",
+    "System management and monitoring (AMD SMI, rocminfo)",
+    "LLVM-based ROCm compiler toolchain with HIPCC",
+    "Full PyTorch and TensorFlow integration",
+    "Support for CDNA (Instinct) and RDNA (Radeon) GPU architectures",
+    "OpenCL and OpenMP programming model support"
+  ],
+  "publicApiSurface": [
+    "HIP C++ Runtime API",
+    "hipBLAS / rocBLAS",
+    "hipFFT / rocFFT",
+    "hipRAND / rocRAND",
+    "hipSOLVER / rocSOLVER",
+    "hipSPARSE / rocSPARSE",
+    "MIOpen (deep learning primitives)",
+    "MIGraphX (graph inference engine)",
+    "RCCL (collective communications)",
+    "rocPRIM / hipCUB (parallel primitives)",
+    "AMD SMI (system management interface)",
+    "ROCprofiler-SDK",
+    "ROCm CMake build tools",
+    "HIPIFY (CUDA to HIP translation)"
+  ]
+}

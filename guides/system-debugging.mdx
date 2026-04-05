@@ -1,0 +1,473 @@
+---
+title: "System debugging"
+description: "Debug ROCm installations and GPU workloads"
+---
+
+This guide covers common debugging techniques, environment variables, and tools for diagnosing issues with ROCm installations, GPU detection, driver problems, and application-level errors.
+
+## Quick diagnostics
+
+Before diving into specific issues, run these commands to get a system overview:
+
+```bash
+# Check ROCm version
+cat /opt/rocm/.info/version
+
+# List all detected AMD GPUs
+rocminfo | grep -E "Agent|Name|Uuid"
+
+# Check GPU status and health
+rocm-smi
+
+# Check kernel module is loaded
+lsmod | grep amdgpu
+
+# Check kernel version
+uname -r
+
+# Dump firmware version
+sudo cat /sys/kernel/debug/dri/1/amdgpu_firmware_info
+```
+
+## Common installation issues
+
+<AccordionGroup>
+  <Accordion title="GPUs not detected by rocminfo">
+    If `rocminfo` shows no GPU agents, work through the following checks:
+
+    **1. Verify the GPU is detected by the kernel:**
+
+    ```bash
+    lspci | grep -i amd
+    # Should list your AMD GPU
+    ```
+
+    **2. Check that the amdgpu kernel module is loaded:**
+
+    ```bash
+    lsmod | grep amdgpu
+    # If empty, try loading manually:
+    sudo modprobe amdgpu
+    ```
+
+    **3. Check dmesg for GPU initialization errors:**
+
+    ```bash
+    sudo dmesg | grep -i amdgpu | tail -30
+    sudo dmesg | grep -i kfd | tail -20
+    ```
+
+    **4. Verify device nodes exist:**
+
+    ```bash
+    ls -la /dev/kfd /dev/dri/renderD*
+    # /dev/kfd must exist for ROCm compute workloads
+    ```
+
+    **5. Check user group membership:**
+
+    ```bash
+    groups $USER
+    # Must include 'video' and 'render'
+
+    # Add if missing:
+    sudo usermod -a -G video,render $USER
+    # Log out and back in
+    ```
+  </Accordion>
+
+  <Accordion title="ROCm package installation failures">
+    **Repository GPG key errors:**
+
+    ```bash
+    # Re-add the ROCm signing key
+    wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | \
+      sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/rocm.gpg
+
+    sudo apt update
+    ```
+
+    **Missing dependencies:**
+
+    ```bash
+    # Fix broken package dependencies
+    sudo apt --fix-broken install
+
+    # Try installing with verbose output
+    sudo apt install rocm-dev -V 2>&1 | tee rocm-install.log
+    ```
+
+    **Check installed ROCm packages:**
+
+    ```bash
+    apt list --installed | grep rocm
+    dpkg -l | grep rocm
+    ```
+  </Accordion>
+
+  <Accordion title="Post-install PATH and library configuration">
+    After installing ROCm, the tools and libraries must be on your PATH and library path. Add to `~/.bashrc` or `~/.profile`:
+
+    ```bash
+    export PATH=$PATH:/opt/rocm/bin:/opt/rocm/hip/bin
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rocm/lib:/opt/rocm/hip/lib
+
+    # Reload
+    source ~/.bashrc
+    ```
+
+    Alternatively, use the system-wide ROCm profile:
+
+    ```bash
+    # Add the ROCm ld.so.conf
+    echo '/opt/rocm/lib' | sudo tee /etc/ld.so.conf.d/rocm.conf
+    sudo ldconfig
+
+    # Verify
+    ldconfig -p | grep rocm
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## GPU detection issues
+
+<AccordionGroup>
+  <Accordion title="Using rocminfo to diagnose GPU agents">
+    `rocminfo` queries the ROCm runtime for all HSA (Heterogeneous System Architecture) agents — both CPU and GPU. A healthy output looks like:
+
+    ```bash
+    rocminfo
+    ```
+
+    ```
+    ROCk module is loaded
+    =====================
+    HSA System Attributes
+    Runtime Version:         1.14
+    ...
+
+    *******
+    Agent 1
+    *******
+      Name:                    AMD EPYC 9654
+      ...
+
+    *******
+    Agent 2
+    *******
+      Name:                    gfx90a       <- GPU agent
+      Uuid:                    GPU-XXXXXXXX
+      Marketing Name:          AMD Instinct MI300X
+      ...
+      Compute Unit:            304
+      Wavefronts per CU:       32
+    ```
+
+    If no GPU agents appear, see the "GPUs not detected" section above.
+
+    **Show GPU memory details:**
+
+    ```bash
+    rocminfo | grep -A 5 "Memory Region"
+    ```
+  </Accordion>
+
+  <Accordion title="ROCR_VISIBLE_DEVICES to select specific GPUs">
+    To restrict which GPUs are visible to a ROCm application (useful for multi-GPU systems):
+
+    ```bash
+    # Use only GPU 0 and GPU 2
+    ROCR_VISIBLE_DEVICES=0,2 python my_script.py
+
+    # Use only GPU 3
+    ROCR_VISIBLE_DEVICES=3 ./my_hpc_app
+    ```
+
+    In PyTorch, the equivalent is:
+
+    ```bash
+    CUDA_VISIBLE_DEVICES=0,1 python train.py
+    ```
+
+    Note: `CUDA_VISIBLE_DEVICES` is honored by the ROCm PyTorch build and maps directly to `ROCR_VISIBLE_DEVICES`.
+  </Accordion>
+</AccordionGroup>
+
+## Driver issues
+
+<AccordionGroup>
+  <Accordion title="Check amdgpu driver version and firmware">
+    ```bash
+    # Check driver version via modinfo
+    modinfo amdgpu | grep version
+
+    # Check loaded driver version from sysfs
+    cat /sys/module/amdgpu/version
+
+    # Dump complete firmware version info
+    sudo cat /sys/kernel/debug/dri/1/amdgpu_firmware_info
+    ```
+
+    **Reinstall the amdgpu driver:**
+
+    ```bash
+    # Using amdgpu-install
+    sudo amdgpu-install --uninstall
+    sudo amdgpu-install --usecase=rocm
+    ```
+  </Accordion>
+
+  <Accordion title="Kernel module parameters">
+    The `amdkfd` kernel module has parameters that affect ROCm compute behavior:
+
+    ```bash
+    # View all amdkfd parameters
+    ls /sys/module/amdkfd/parameters/
+    cat /sys/module/amdkfd/parameters/noretry
+
+    # Disable page retry on GFX9/Vega devices (may help with memory errors)
+    sudo -s
+    echo 1 > /sys/module/amdkfd/parameters/noretry
+
+    # Make permanent via modprobe config
+    echo 'options amdkfd noretry=1' | sudo tee /etc/modprobe.d/amdkfd.conf
+    ```
+  </Accordion>
+
+  <Accordion title="Kernel parameter to avoid Ethernet renaming">
+    If your Ethernet port gets renamed when changing GPU configurations, add the following kernel parameters to prevent this:
+
+    ```bash
+    # Add to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub:
+    net.ifnames=0 biosdevname=0
+
+    sudo update-grub
+    sudo reboot
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Debug flags and environment variables
+
+<AccordionGroup>
+  <Accordion title="HSAKMT debug levels (libhsakmt.so)">
+    The `libhsakmt.so` library (KFD thunk) provides debug output at configurable verbosity levels via the `HSAKMT_DEBUG_LEVEL` environment variable:
+
+    | Level | What is printed |
+    |---|---|
+    | `3` | `pr_err()` only — serious errors |
+    | `4` | `pr_err()` and `pr_warn()` |
+    | `5` | Same as 4 (notice not implemented) |
+    | `6` | Errors, warnings, and `pr_info()` |
+    | `7` | Everything including `pr_debug()` |
+
+    ```bash
+    # Enable verbose debug output (level 7)
+    export HSAKMT_DEBUG_LEVEL=7
+    ./my_rocm_app 2>&1 | tee hsakmt_debug.log
+
+    # Or for just errors
+    export HSAKMT_DEBUG_LEVEL=3
+    ```
+  </Accordion>
+
+  <Accordion title="ROCr (HSA runtime) environment variables">
+    These environment variables control the ROCm HSA runtime behavior:
+
+    ```bash
+    # Disable SDMA (use CPU copy instead) — useful when debugging transfer issues
+    export HSA_ENABLE_SDMA=0
+
+    # Disable interrupt-based completion signaling
+    export HSA_ENABLE_INTERRUPT=0
+
+    # Disable SVM guard pages (can help with certain memory access patterns)
+    export HSA_SVM_GUARD_PAGES=0
+
+    # Disable GPU cache (forces all reads from HBM — useful for debugging cache coherency)
+    export HSA_DISABLE_CACHE=1
+    ```
+
+    <Warning>
+      These variables significantly impact performance and should only be set for debugging purposes, not in production workloads.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="ROCr error codes">
+    When a ROCm application reports a numeric error code, look it up here:
+
+    | Code | Meaning |
+    |---|---|
+    | `2` | Invalid Dimension |
+    | `4` | Invalid Group Memory |
+    | `8` | Invalid (or Null) Code |
+    | `32` | Invalid Format |
+    | `64` | Group is too large |
+    | `128` | Out of VGPRs |
+    | `0x80000000` | Debug Options |
+  </Accordion>
+
+  <Accordion title="HIP and OpenCL debug flags">
+    ```bash
+    # Wait for each GPU command to complete before continuing (helps isolate errors)
+    export AMD_OCL_WAIT_COMMAND=1   # 0 = OFF, 1 = ON
+
+    # HIP kernel launch error checking
+    export HIP_LAUNCH_BLOCKING=1
+    ```
+
+    For debugging HIP application memory and kernel issues, see [HIP debugging documentation](https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html).
+  </Accordion>
+</AccordionGroup>
+
+## Memory and performance debugging
+
+<AccordionGroup>
+  <Accordion title="Monitor GPU memory usage">
+    ```bash
+    # Show memory usage for all GPUs
+    rocm-smi --showmemuse
+
+    # Show VRAM and GTT usage
+    rocm-smi --showmeminfo vram
+    rocm-smi --showmeminfo gtt
+
+    # Watch GPU utilization and memory in real time
+    watch -n 1 rocm-smi
+    ```
+
+    In Python with PyTorch:
+
+    ```python
+    import torch
+
+    # Print a summary of GPU memory allocation
+    print(torch.cuda.memory_summary(device=0, abbreviated=False))
+
+    # Get specific metrics
+    allocated = torch.cuda.memory_allocated(0) / 1024**3
+    reserved  = torch.cuda.memory_reserved(0)  / 1024**3
+    print(f"Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB")
+    ```
+  </Accordion>
+
+  <Accordion title="PCIe bandwidth and transfer debugging">
+    Low PCIe bandwidth can cause performance bottlenecks for data-transfer-intensive workloads. Measure and debug:
+
+    ```bash
+    # Check PCIe bandwidth with rocm-smi
+    rocm-smi --showpciebw
+
+    # Check PCIe link speed (Gen4 x16 = ~32 GB/s)
+    sudo lspci -vvv | grep "LnkSta:"
+
+    # Use TransferBench to measure CPU-GPU transfer rates
+    git clone https://github.com/ROCm/TransferBench.git
+    cd TransferBench && CC=hipcc make
+    ./TransferBench
+    ```
+
+    For information on debugging HIP application PCIe transfers, see the [HIP debugging guide](https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/debugging.html).
+  </Accordion>
+
+  <Accordion title="Profile GPU utilization">
+    ```bash
+    # Show GPU compute and memory utilization
+    rocm-smi --showuse
+
+    # Show clock speeds during workload
+    rocm-smi --showclocks
+
+    # Enable profiling with rocprof
+    rocprof --stats ./my_gpu_app
+
+    # Profile with HIP trace
+    rocprof --hip-trace ./my_gpu_app
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Debugging applications with ROCgdb
+
+ROCgdb is the AMD GPU debugger, based on GDB, for debugging HIP, OpenCL, and OpenMP offload applications.
+
+<Steps>
+  <Step title="Install ROCgdb">
+    ```bash
+    sudo apt install rocm-gdb
+    ```
+  </Step>
+
+  <Step title="Compile with debug symbols">
+    Build your HIP application with debug symbols and without optimization:
+
+    ```cpp
+    // hip_app.cpp
+    #include <hip/hip_runtime.h>
+    #include <stdio.h>
+
+    __global__ void kernel(float *data, int n) {
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (idx < n) {
+            data[idx] *= 2.0f;
+        }
+    }
+    ```
+
+    ```bash
+    # Compile with -g -O0 for debugging
+    hipcc -g -O0 -o hip_app hip_app.cpp
+    ```
+  </Step>
+
+  <Step title="Launch ROCgdb">
+    ```bash
+    rocgdb ./hip_app
+    ```
+
+    Inside ROCgdb, use standard GDB commands:
+
+    ```
+    (gdb) break kernel          # set breakpoint in GPU kernel
+    (gdb) run                   # start the program
+    (gdb) info threads          # list CPU and GPU threads
+    (gdb) thread 2              # switch to GPU thread
+    (gdb) print idx             # inspect GPU-side variable
+    (gdb) backtrace             # show call stack
+    (gdb) continue
+    (gdb) quit
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  ROCgdb supports debugging kernels on AMD GFX9 and newer GPU architectures. Older architectures may have limited GPU thread introspection capabilities.
+</Note>
+
+## Log collection for support
+
+When filing a support request or bug report, collect the following diagnostic information:
+
+```bash
+#!/bin/bash
+# Collect ROCm system diagnostics
+
+echo "=== ROCm version ===" && cat /opt/rocm/.info/version
+echo "=== Kernel version ===" && uname -a
+echo "=== GPU info ===" && rocminfo
+echo "=== GPU status ===" && rocm-smi --showallinfo
+echo "=== amdgpu module info ===" && modinfo amdgpu
+echo "=== PCIe devices ===" && lspci | grep -i amd
+echo "=== dmesg (amdgpu) ===" && sudo dmesg | grep -i "amdgpu\|kfd" | tail -50
+echo "=== Installed ROCm packages ===" && apt list --installed 2>/dev/null | grep rocm
+```
+
+Save the output to a file:
+
+```bash
+bash collect_diagnostics.sh > rocm_diagnostics.txt 2>&1
+```
+
+<Tip>
+  When reporting GPU application crashes, also capture the application output with `HSAKMT_DEBUG_LEVEL=7` and `HSA_ENABLE_SDMA=0` set, as these environment variables often reveal the root cause of HSA runtime errors.
+</Tip>

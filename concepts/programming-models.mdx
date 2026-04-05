@@ -1,0 +1,365 @@
+---
+title: "Programming models"
+description: GPU programming interfaces supported by ROCm — HIP, OpenCL, and OpenMP
+keywords: [HIP, OpenCL, OpenMP, CUDA, HIPIFY, GPU programming, ROCm, heterogeneous compute]
+---
+
+ROCm provides a robust environment for heterogeneous programs running on both CPUs and AMD GPUs. The natively supported programming languages are **HIP** and **OpenCL**, but HIP bindings are also available for Python and Fortran. For CPU-centric codebases, ROCm supports **OpenMP** target offloading as a way to incrementally port workloads to the GPU.
+
+<CardGroup cols={3}>
+  <Card title="HIP" icon="code" href="/concepts/programming-models#hip">
+    C++ runtime API and kernel language. The primary ROCm programming model, designed for portability with CUDA.
+  </Card>
+  <Card title="OpenCL" icon="globe" href="/concepts/programming-models#opencl">
+    Open standard for cross-platform parallel programming across CPUs, GPUs, and APUs.
+  </Card>
+  <Card title="OpenMP" icon="microchip" href="/concepts/programming-models#openmp">
+    Directive-based GPU offloading for C, C++, and Fortran applications.
+  </Card>
+</CardGroup>
+
+<Tabs>
+  <Tab title="HIP">
+    ## HIP
+
+    **HIP (Heterogeneous-Compute Interface for Portability)** is a C++ runtime API and kernel language that is the essential ROCm programming language. HIP is designed to be a marshalling language allowing code written for NVIDIA CUDA to be ported to run on AMD GPUs with minimal changes. Developers can write HIP kernels that execute on AMD GPUs while maintaining source-level compatibility with CUDA-based systems.
+
+    ### What HIP provides
+
+    HIP gives you direct control over the GPU with an explicit programming model:
+
+    - **Kernel functions** — C++ functions prefixed with `__global__` that run on the GPU
+    - **Device memory management** — explicit allocation, deallocation, and transfer between host and device
+    - **Streams** — FIFO command queues enabling concurrent GPU operations and overlapping compute with data transfer
+    - **Events** — synchronization primitives for measuring elapsed time and ordering operations across streams
+    - **Unified memory** — optional managed memory model allowing shared CPU/GPU address spaces
+
+    ### CUDA compatibility
+
+    HIP APIs map closely to CUDA APIs. For example:
+
+    | CUDA | HIP |
+    |------|-----|
+    | `cudaMalloc` | `hipMalloc` |
+    | `cudaMemcpy` | `hipMemcpy` |
+    | `cudaFree` | `hipFree` |
+    | `cudaDeviceSynchronize` | `hipDeviceSynchronize` |
+    | `__global__` | `__global__` |
+    | `threadIdx.x` | `threadIdx.x` |
+    | `blockIdx.x` | `blockIdx.x` |
+
+    HIP code compiles for AMD GPUs via the ROCm compiler (`hipcc`) and can also target NVIDIA GPUs via CUDA, making it a portable GPU programming solution.
+
+    ### Vector addition example
+
+    The following example allocates vectors on the GPU, launches a kernel to add them element-wise, and copies the result back to the host.
+
+    ```cpp
+    #include <hip/hip_runtime.h>
+    #include <stdio.h>
+
+    #define N 1024
+
+    // Kernel: runs on the GPU, one thread per element
+    __global__ void vectorAdd(const float* a, const float* b, float* c, int n) {
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (idx < n) {
+            c[idx] = a[idx] + b[idx];
+        }
+    }
+
+    int main() {
+        float *h_a, *h_b, *h_c;          // host pointers
+        float *d_a, *d_b, *d_c;          // device pointers
+
+        size_t bytes = N * sizeof(float);
+
+        // Allocate host memory
+        h_a = (float*)malloc(bytes);
+        h_b = (float*)malloc(bytes);
+        h_c = (float*)malloc(bytes);
+
+        // Initialize input vectors
+        for (int i = 0; i < N; i++) {
+            h_a[i] = (float)i;
+            h_b[i] = (float)(N - i);
+        }
+
+        // Allocate device memory
+        hipMalloc(&d_a, bytes);
+        hipMalloc(&d_b, bytes);
+        hipMalloc(&d_c, bytes);
+
+        // Copy inputs from host to device
+        hipMemcpy(d_a, h_a, bytes, hipMemcpyHostToDevice);
+        hipMemcpy(d_b, h_b, bytes, hipMemcpyHostToDevice);
+
+        // Launch kernel: 1024 threads in blocks of 256
+        int threadsPerBlock = 256;
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        hipLaunchKernelGGL(vectorAdd, blocksPerGrid, threadsPerBlock, 0, 0,
+                           d_a, d_b, d_c, N);
+
+        // Copy result back to host
+        hipMemcpy(h_c, d_c, bytes, hipMemcpyDeviceToHost);
+
+        printf("c[0] = %f, c[N-1] = %f\n", h_c[0], h_c[N-1]);
+
+        // Free memory
+        hipFree(d_a); hipFree(d_b); hipFree(d_c);
+        free(h_a); free(h_b); free(h_c);
+        return 0;
+    }
+    ```
+
+    Compile and run with:
+
+    ```bash
+    hipcc vectorAdd.cpp -o vectorAdd
+    ./vectorAdd
+    ```
+
+    ### HIPIFY: converting CUDA to HIP
+
+    The **HIPIFY** tool automates the translation of CUDA source code to HIP. It replaces CUDA API calls and data types with their HIP equivalents.
+
+    ```bash
+    # Convert a CUDA source file to HIP
+    hipify-perl cuda_source.cu > hip_source.cpp
+
+    # Or use the clang-based tool for more complex codebases
+    hipify-clang cuda_source.cu -- --cuda-path=/usr/local/cuda
+    ```
+
+    HIPIFY handles most common CUDA patterns including kernel launches, memory management, cuBLAS/cuDNN calls, and CUDA intrinsics.
+
+    ### Language bindings
+
+    - **Python**: HIP Python bindings are available at [github.com/ROCm/hip-python](https://github.com/ROCm/hip-python). Python is popular in AI and machine learning applications via frameworks like PyTorch and TensorFlow.
+    - **Fortran**: HIPFort provides Fortran bindings at [github.com/ROCm/hipfort](https://github.com/ROCm/hipfort), enabling scientific and HPC legacy applications to run on AMD GPUs via HIP.
+  </Tab>
+  <Tab title="OpenCL">
+    ## OpenCL
+
+    **OpenCL (Open Computing Language)** is an open standard for cross-platform, parallel programming of diverse processors including CPUs, GPUs, DSPs, and FPGAs. ROCm includes a full OpenCL implementation for developers who need portability across different hardware vendors or who are working with existing OpenCL codebases.
+
+    OpenCL is standardized by the Khronos Group. For specification details, see [khronos.org/opencl](https://www.khronos.org/opencl/).
+
+    ### OpenCL programming model
+
+    OpenCL uses a host-device model similar to HIP, but with a more explicit platform and context API:
+
+    <Steps>
+      <Step title="Query the platform">
+        Enumerate available OpenCL platforms and select the AMD ROCm platform.
+      </Step>
+      <Step title="Create a context and command queue">
+        A context groups devices and memory objects. A command queue submits work to a specific device.
+      </Step>
+      <Step title="Compile the kernel">
+        OpenCL kernels are written in OpenCL C and compiled at runtime from source strings or binaries.
+      </Step>
+      <Step title="Allocate buffers and run the kernel">
+        Create `cl_mem` buffer objects, set kernel arguments, and enqueue the kernel for execution.
+      </Step>
+      <Step title="Read results">
+        Enqueue a read operation to transfer results back from device memory to host memory.
+      </Step>
+    </Steps>
+
+    ### Vector addition in OpenCL
+
+    ```cpp
+    // kernel.cl — OpenCL kernel source
+    __kernel void vectorAdd(__global const float* a,
+                            __global const float* b,
+                            __global float* c,
+                            int n) {
+        int idx = get_global_id(0);
+        if (idx < n) {
+            c[idx] = a[idx] + b[idx];
+        }
+    }
+    ```
+
+    ```cpp
+    // host.cpp — OpenCL host code
+    #include <CL/cl.h>
+    #include <stdio.h>
+    #include <stdlib.h>
+
+    #define N 1024
+
+    int main() {
+        cl_platform_id platform;
+        cl_device_id device;
+        cl_context context;
+        cl_command_queue queue;
+        cl_program program;
+        cl_kernel kernel;
+        cl_mem d_a, d_b, d_c;
+
+        clGetPlatformIDs(1, &platform, NULL);
+        clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+        context = clCreateContext(NULL, 1, &device, NULL, NULL, NULL);
+        queue = clCreateCommandQueueWithProperties(context, device, NULL, NULL);
+
+        // Load and compile kernel source
+        const char* src = /* kernel.cl contents */;
+        program = clCreateProgramWithSource(context, 1, &src, NULL, NULL);
+        clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+        kernel = clCreateKernel(program, "vectorAdd", NULL);
+
+        size_t bytes = N * sizeof(float);
+        d_a = clCreateBuffer(context, CL_MEM_READ_ONLY, bytes, NULL, NULL);
+        d_b = clCreateBuffer(context, CL_MEM_READ_ONLY, bytes, NULL, NULL);
+        d_c = clCreateBuffer(context, CL_MEM_WRITE_ONLY, bytes, NULL, NULL);
+
+        // ... write host data to d_a and d_b, set kernel args, enqueue kernel ...
+        int n = N;
+        clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_a);
+        clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_b);
+        clSetKernelArg(kernel, 2, sizeof(cl_mem), &d_c);
+        clSetKernelArg(kernel, 3, sizeof(int), &n);
+
+        size_t global_size = N;
+        clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global_size, NULL, 0, NULL, NULL);
+        clFinish(queue);
+
+        // Read result
+        float* h_c = (float*)malloc(bytes);
+        clEnqueueReadBuffer(queue, d_c, CL_TRUE, 0, bytes, h_c, 0, NULL, NULL);
+
+        printf("c[0] = %f\n", h_c[0]);
+
+        clReleaseMemObject(d_a); clReleaseMemObject(d_b); clReleaseMemObject(d_c);
+        clReleaseKernel(kernel); clReleaseProgram(program);
+        clReleaseCommandQueue(queue); clReleaseContext(context);
+        return 0;
+    }
+    ```
+
+    <Tip>
+      For new AMD GPU projects, HIP is generally recommended over OpenCL. HIP provides a closer mapping to the hardware, better tooling support within the ROCm ecosystem, and easier portability from CUDA codebases.
+    </Tip>
+  </Tab>
+  <Tab title="OpenMP">
+    ## OpenMP
+
+    ROCm includes GPU offloading support through the **OpenMP** programming model. OpenMP target directives allow C, C++, and Fortran applications to offload compute-intensive loops and regions to AMD GPUs without writing explicit GPU kernels.
+
+    This is especially useful for porting existing CPU-parallel HPC applications incrementally to GPUs.
+
+    ### OpenMP target offloading
+
+    Use the `target` and `teams distribute parallel for` directives to offload a loop to the GPU:
+
+    ```cpp
+    #include <stdio.h>
+    #include <stdlib.h>
+
+    #define N 1024
+
+    int main() {
+        float a[N], b[N], c[N];
+
+        for (int i = 0; i < N; i++) {
+            a[i] = (float)i;
+            b[i] = (float)(N - i);
+        }
+
+        // Offload the loop to the GPU
+        #pragma omp target teams distribute parallel for \
+                map(to: a[0:N], b[0:N]) \
+                map(from: c[0:N])
+        for (int i = 0; i < N; i++) {
+            c[i] = a[i] + b[i];
+        }
+
+        printf("c[0] = %f, c[N-1] = %f\n", c[0], c[N-1]);
+        return 0;
+    }
+    ```
+
+    Compile with the ROCm LLVM compiler targeting a specific GPU architecture:
+
+    ```bash
+    clang -fopenmp -fopenmp-targets=amdgcn-amd-amdhsa \
+          -Xopenmp-target=amdgcn-amd-amdhsa -march=gfx942 \
+          omp_vector_add.c -o omp_vector_add
+    ```
+
+    ### Key OpenMP GPU directives
+
+    | Directive | Purpose |
+    |-----------|---------|
+    | `#pragma omp target` | Offload a region to the target device (GPU) |
+    | `#pragma omp target data` | Map data to/from the GPU without executing a kernel |
+    | `#pragma omp target update` | Update mapped data between host and device |
+    | `#pragma omp teams` | Create a league of thread teams on the GPU |
+    | `#pragma omp distribute` | Distribute loop iterations across teams |
+    | `#pragma omp parallel for` | Parallelize within a team |
+
+    ### Device selection with OpenMP
+
+    Use `OMP_DEFAULT_DEVICE` to select which GPU to use when multiple devices are present:
+
+    ```bash
+    # Use the third GPU (zero-indexed)
+    export OMP_DEFAULT_DEVICE=2
+    ./omp_vector_add
+    ```
+
+    In code, query available devices:
+
+    ```cpp
+    #include <omp.h>
+    #include <stdio.h>
+
+    int main() {
+        int num_devices = omp_get_num_devices();
+        int default_device = omp_get_default_device();
+        printf("Available devices: %d, default: %d\n", num_devices, default_device);
+        return 0;
+    }
+    ```
+
+    <Note>
+      Full OpenMP GPU offloading documentation is available in the [ROCm compiler infrastructure OpenMP reference](https://rocm.docs.amd.com/projects/llvm-project/en/latest/conceptual/openmp.html).
+    </Note>
+  </Tab>
+</Tabs>
+
+## Advanced compiler features
+
+The ROCm compiler (based on LLVM/Clang) provides several advanced features for GPU code optimization and debugging.
+
+<AccordionGroup>
+  <Accordion title="AddressSanitizer for GPU code">
+    ROCm includes GPU AddressSanitizer (ASan) support for detecting memory errors in GPU kernels such as out-of-bounds accesses and use-after-free bugs. This is an extension of the standard LLVM ASan tool that works on both CPU host code and GPU kernel code simultaneously.
+
+    See the [GPU sanitizer guide](https://rocm.docs.amd.com/projects/llvm-project/en/latest/conceptual/using-gpu-sanitizer.html) for usage instructions.
+  </Accordion>
+  <Accordion title="ROCm compiler infrastructure">
+    The ROCm compiler is built on LLVM and provides:
+
+    - The `amdgcn-amd-amdhsa` target triple for AMD GPU code generation
+    - LLVM IR optimization passes tuned for AMD GPU architectures
+    - Support for inline assembly using AMD ISA
+    - Link-time optimization (LTO) across GPU translation units
+
+    See the [ROCm compiler infrastructure documentation](https://rocm.docs.amd.com/projects/llvm-project/en/latest/index.html) for the full reference.
+  </Accordion>
+  <Accordion title="Choosing a programming model">
+    Use this guide to choose the right programming model for your use case:
+
+    | Scenario | Recommended model |
+    |----------|------------------|
+    | Porting existing CUDA code | HIP + HIPIFY |
+    | New GPU-native development | HIP |
+    | Cross-vendor portability required | OpenCL |
+    | Incrementally offloading CPU HPC code | OpenMP |
+    | Python ML/AI workloads | HIP Python bindings or PyTorch/TensorFlow on ROCm |
+    | Fortran HPC applications | HIPFort |
+  </Accordion>
+</AccordionGroup>

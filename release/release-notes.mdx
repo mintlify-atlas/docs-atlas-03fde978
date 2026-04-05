@@ -1,0 +1,154 @@
+---
+title: "Release notes"
+description: "What's new in the latest AMD ROCm release"
+keywords: ["ROCm", "release notes", "7.2.1", "changelog", "AMD GPU"]
+---
+
+# Release notes
+
+## ROCm 7.2.1
+
+**Release date:** March 25, 2026
+
+<Note>
+ROCm 7.2.1 adds support for Ubuntu 24.04.4 (kernel: 6.8 [GA], 6.17 [HWE]) and marks end of support for Ubuntu 24.04.3. The ROCm Offline Installer Creator is discontinued in this release — use the ROCm Runfile Installer as a replacement.
+</Note>
+
+## Key highlights
+
+- **Ubuntu 24.04.4 support:** Kernel 6.8 (GA) and 6.17 (HWE) are now supported.
+- **JAX 0.8.2 support:** ROCm 7.2.1 enables support for JAX 0.8.2.
+- **hipBLASLt performance improvements:** Improved performance for MXFP8 and MXFP4 GEMMs.
+- **HIP runtime stability fixes:** Resolved stream capture, `hipEventQuery`, AQL packet doorbell, and memory-object reference counting issues.
+- **ROCm Offline Installer Creator discontinued:** Use the [ROCm Runfile Installer](https://rocm.docs.amd.com/projects/install-on-linux/en/docs-7.2.1/install/rocm-runfile-installer.html) instead.
+- **New ROCm glossary:** Added a structured glossary covering device hardware, device software, host software, and performance concepts.
+
+## Supported hardware
+
+Hardware support is unchanged from ROCm 7.2.0. Supported GPU families include AMD Instinct MI355X, MI350X, MI325X, MI300X, MI300A, MI250X, MI250, MI210, and MI100.
+
+For full system requirements, see [Supported GPUs (Linux)](https://rocm.docs.amd.com/projects/install-on-linux/en/docs-7.2.1/reference/system-requirements.html#supported-gpus).
+
+## Component changes
+
+<AccordionGroup>
+
+  <Accordion title="AMD SMI (26.2.2)">
+
+    #### Added
+
+    - GPU board and base board temperature sensors to the `amd-smi monitor` command.
+
+    #### Resolved issues
+
+    - JSON output was not formatted correctly when using watch mode with metrics.
+    - Output was not properly redirected to file when using JSON format.
+    - CPER component output was not redirected when using the `--follow` option.
+    - Invalid CPER files caused garbage output for AFID lists.
+    - JSON output was not formatted correctly for reset commands.
+
+  </Accordion>
+
+  <Accordion title="HIP (7.2.1)">
+
+    #### Resolved issues
+
+    - Corrected the validation of stream capture in global-capture mode. It is no longer affected by thread-local capture-mode sequences occurring in other threads.
+    - Corrected the return value of `hipEventQuery` and `hipEventSynchronize`. The HIP runtime now properly handles and restricts stream capture within these APIs.
+    - Corrected an issue in the batch-dispatch doorbell for AQL packets to avoid a potential CPU hang.
+    - To address potential delays in memory-object destruction that could affect application logic, the HIP runtime disables memory-object reference counting in direct-dispatch mode.
+
+    #### Changed
+
+    - The `AMD_DIRECT_DISPATCH` environment variable has been deprecated in the HIP runtime.
+
+  </Accordion>
+
+  <Accordion title="hipBLASLt (1.2.2)">
+
+    #### Changed
+
+    - Enumeration value update for the Sigmoid Activation Function feature.
+
+  </Accordion>
+
+  <Accordion title="rocDecode (1.7.0)">
+
+    #### Upcoming changes
+
+    - The rocDecode GitHub repository will be officially moved to the [rocm-systems monorepo](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocdecode) in an upcoming release.
+
+  </Accordion>
+
+  <Accordion title="rocJPEG (1.4.0)">
+
+    #### Changed
+
+    - Bug fixes and performance improvements.
+
+    #### Upcoming changes
+
+    - The rocJPEG GitHub repository will be officially moved to the [rocm-systems monorepo](https://github.com/ROCm/rocm-systems/tree/develop/projects/rocjpeg) in an upcoming release.
+
+  </Accordion>
+
+  <Accordion title="rocSHMEM (3.2.0)">
+
+    #### Added
+
+    - Warnings to notify if large BAR is not available.
+
+    #### Resolved issues
+
+    - GDA Backend will now disable itself when no GDA-compatible NICs are available, rather than crashing.
+    - Fixed memory coherency issues on gfx1201.
+
+    #### Known issues
+
+    - Only 64-bit rocSHMEM atomic APIs are implemented for the GDA conduit.
+
+  </Accordion>
+
+  <Accordion title="RPP (2.2.1)">
+
+    #### Added
+
+    - Error-code capture in test scripts for all C++ tests.
+
+    #### Optimized
+
+    - Optimized F16 variants by replacing scalar load/store operations with AVX2 intrinsics for `spatter`, `log`, `blend`, `color_cast`, `flip`, `crop_mirror_normalize`, and `exposure` kernels.
+
+  </Accordion>
+
+</AccordionGroup>
+
+## Known issues
+
+<Warning>
+You might observe a performance regression when using hipBLASLt with AMD Instinct MI300X, MI325X, or MI350 Series GPUs for specific GEMM configurations. See [GitHub issue #6065](https://github.com/ROCm/ROCm/issues/6065) for details.
+</Warning>
+
+- **hipBLASLt GEMM performance regression (MI300X, MI325X):** Affected configurations include `16384 × 16384 × 6656 (BBS, TN)`, `32768 × 8192 × 3072 (BBS, TN)`, and `9728 × 8192 × 65536 (F8F8S, TN)`.
+- **hipBLASLt longer runtime on MI300X in CPX/NPS4 mode:** Extensive kernel search may occur when pre-tuned kernels are unavailable. See [GitHub issue #6066](https://github.com/ROCm/ROCm/issues/6066).
+- **ROCTracer kernel operation reporting failure:** Applications using ROCTracer may fail to receive some or all kernel operation events. ROCTracer is deprecated and reaches end of support by end of 2026 Q2. See [GitHub issue #6102](https://github.com/ROCm/ROCm/issues/6102).
+
+## Resolved issues
+
+- **Increased `hipStreamCreate` latency:** An issue that doubled runtime latency of `hipStreamCreate` has been resolved. See [GitHub issue #5978](https://github.com/ROCm/ROCm/issues/5978).
+
+## Upcoming changes
+
+<Note>
+The following deprecations are planned for future ROCm releases. Begin transitioning your projects now to avoid disruption.
+</Note>
+
+- **ROCTracer, ROCProfiler, `rocprof`, and `rocprofv2`** are deprecated. Transition to [ROCprofiler-SDK](https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/) (`rocprofv3`). End of support is anticipated by end of 2026 Q2.
+- **ROCm SMI** will enter maintenance mode in an upcoming release. Transition to [AMD SMI](https://rocm.docs.amd.com/projects/amdsmi/en/latest/).
+- **HIPCC** is deprecated as of ROCm 7.2.0. Invoke [AMD Clang](https://rocm.docs.amd.com/projects/llvm-project/en/latest/index.html) directly instead.
+- **ROCm Object Tooling** (`roc-obj-ls`, `roc-obj-extract`, `roc-obj`) were deprecated in ROCm 6.4 and will be removed in a future release. Use `llvm-objdump --offloading` instead.
+- **Composable Kernel** will adopt C++20 features in an upcoming release, raising the minimum compiler requirement to C++20.
+
+---
+
+For the complete history of changes across all versions, see the [version history](/release/version-history).

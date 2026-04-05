@@ -1,80 +1,340 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick start"
+description: "Install ROCm on Linux and run your first GPU-accelerated program."
+keywords: ["ROCm", "install", "AMD", "GPU", "HIP", "Ubuntu", "RHEL", "quick start"]
 ---
 
-## Get started in three steps
+This guide walks you through installing ROCm on Linux, verifying your GPU is detected, and running a simple HIP program.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+### Supported operating systems
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+ROCm supports the following Linux distributions:
 
-### Step 2: Deploy your changes
+| Distribution | Versions |
+|---|---|
+| Ubuntu | 22.04, 24.04 |
+| Red Hat Enterprise Linux (RHEL) | 8.x, 9.x |
+| SUSE Linux Enterprise Server (SLES) | 15 SP5, 15 SP6 |
+| Oracle Linux | 8.x, 9.x |
+| Debian | 12 |
+| Rocky Linux | 8.x, 9.x |
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+### Hardware requirements
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+ROCm supports AMD CDNA (Instinct) and RDNA (Radeon) GPU architectures. Check the [compatibility matrix](/reference/compatibility-matrix) to confirm your GPU is supported for your target ROCm version.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Warning>
+  ROCm requires a supported GPU with PCIe atomics enabled. Ensure your system BIOS has IOMMU/SR-IOV or PCIe atomics enabled. Virtual machines may require additional configuration.
+</Warning>
 
-### Step 3: Go live
+### System requirements
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+- 64-bit x86_64 processor
+- At least 16 GB of system RAM (32 GB+ recommended for AI workloads)
+- AMD GPU with ROCm-compatible firmware
+- Kernel version supported by your ROCm release (see the [compatibility matrix](/reference/compatibility-matrix))
+
+---
+
+## Installation
+
+<Steps>
+
+<Step title="Add the AMD ROCm repository">
+
+Add the AMD GPG key and package repository for your Linux distribution.
+
+<Tabs>
+  <Tab title="Ubuntu / Debian">
+    ```bash
+    # Install prerequisites
+    sudo apt update
+    sudo apt install -y wget gnupg
+
+    # Add the AMD ROCm repository key
+    wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
+      gpg --dearmor | \
+      sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+
+    # Add the ROCm repository (replace <version> with target, e.g. 6.3)
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] \
+      https://repo.radeon.com/rocm/apt/<version> jammy main" | \
+      sudo tee /etc/apt/sources.list.d/rocm.list
+
+    sudo apt update
+    ```
+  </Tab>
+  <Tab title="RHEL / Rocky / Oracle Linux">
+    ```bash
+    # Add the ROCm repository (replace <version> with target, e.g. 6.3)
+    sudo tee /etc/yum.repos.d/rocm.repo <<EOF
+    [ROCm]
+    name=ROCm
+    baseurl=https://repo.radeon.com/rocm/rhel9/<version>/main
+    enabled=1
+    gpgcheck=1
+    gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key
+    EOF
+
+    sudo dnf clean all
+    ```
+  </Tab>
+  <Tab title="SLES">
+    ```bash
+    # Add the ROCm repository (replace <version> with target, e.g. 6.3)
+    sudo zypper addrepo \
+      https://repo.radeon.com/rocm/zyp/<version>/main rocm
+
+    sudo zypper --gpg-auto-import-keys refresh
+    ```
+  </Tab>
+</Tabs>
+
+</Step>
+
+<Step title="Install ROCm packages">
+
+Install the `rocm` meta-package, which pulls in the full ROCm stack including the runtime, HIP, libraries, and tools.
+
+<Tabs>
+  <Tab title="Ubuntu / Debian">
+    ```bash
+    sudo apt install -y rocm
+    ```
+  </Tab>
+  <Tab title="RHEL / Rocky / Oracle Linux">
+    ```bash
+    sudo dnf install rocm
+    ```
+  </Tab>
+  <Tab title="SLES">
+    ```bash
+    sudo zypper install rocm
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  To install a specific ROCm version, use a versioned package name such as `rocm-6.3.0` instead of `rocm`.
+</Tip>
+
+</Step>
+
+<Step title="Configure your user and environment">
+
+Add your user to the `render` and `video` groups so you can access GPU devices without root privileges.
+
+```bash
+sudo usermod -aG render,video $USER
+```
+
+Add the ROCm binary paths to your shell environment:
+
+```bash
+echo 'export PATH=$PATH:/opt/rocm/bin' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/rocm/lib' >> ~/.bashrc
+source ~/.bashrc
+```
+
+<Warning>
+  Log out and back in (or reboot) for group membership changes to take effect.
+</Warning>
+
+</Step>
+
+<Step title="Verify the installation">
+
+Run `rocminfo` to list detected AMD GPU agents and confirm the ROCm runtime is working:
+
+```bash
+rocminfo
+```
+
+You should see output similar to:
+
+```text
+ROCk module version 6.3.x is loaded
+...
+*******
+Agent 1
+*******
+  Name:                    AMD Instinct MI300X
+  Uuid:                    GPU-XXXXXXXXXXXXXXXX
+  Marketing Name:          AMD Instinct MI300X
+  Vendor Name:             AMD
+  Feature:                 KERNEL_DISPATCH
+  Profile:                 FULL_PROFILE
+  Float Round Mode:        NEAR
+  Max Queue Number:        128(0x80)
+  Queue Min Size:          64(0x40)
+  Queue Max Size:          131072(0x20000)
+  ...
+```
+
+Run `rocm-smi` to check GPU utilization, memory, temperature, and power draw:
+
+```bash
+rocm-smi
+```
+
+Expected output:
+
+```text
+========================================== ROCm System Management Interface ==========================================
+====================================================== Info ======================================================
+GPU  Temp (DieEdge)  AvgPwr  SCLK    MCLK     Fan     Perf  PwrCap  VRAM%  GPU%
+  0  35.0c           23.0W   800Mhz  900Mhz   0%      auto  750.0W    0%   0%
+====================================================== End of ROCm SMI Log ======================================================
+```
+
+If your GPU appears in both outputs, ROCm is installed and working correctly.
+
+</Step>
+
+</Steps>
+
+---
+
+## Your first HIP program
+
+HIP (Heterogeneous-Compute Interface for Portability) is the primary programming model for ROCm. The following example adds two vectors on the GPU.
+
+### Vector addition in HIP
+
+Create a file named `vector_add.cpp`:
+
+```cpp
+#include <hip/hip_runtime.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define N 1024
+
+// GPU kernel: add two vectors element-wise
+__global__ void vectorAdd(const float* a, const float* b, float* c, int n) {
+    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < n) {
+        c[i] = a[i] + b[i];
+    }
+}
+
+int main() {
+    size_t bytes = N * sizeof(float);
+
+    // Allocate host memory
+    float* h_a = (float*)malloc(bytes);
+    float* h_b = (float*)malloc(bytes);
+    float* h_c = (float*)malloc(bytes);
+
+    // Initialize input vectors
+    for (int i = 0; i < N; i++) {
+        h_a[i] = (float)i;
+        h_b[i] = (float)(N - i);
+    }
+
+    // Allocate device memory
+    float *d_a, *d_b, *d_c;
+    hipMalloc(&d_a, bytes);
+    hipMalloc(&d_b, bytes);
+    hipMalloc(&d_c, bytes);
+
+    // Copy input data to device
+    hipMemcpy(d_a, h_a, bytes, hipMemcpyHostToDevice);
+    hipMemcpy(d_b, h_b, bytes, hipMemcpyHostToDevice);
+
+    // Launch kernel: 256 threads per block
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+    hipLaunchKernelGGL(vectorAdd, blocksPerGrid, threadsPerBlock, 0, 0,
+                       d_a, d_b, d_c, N);
+
+    // Copy result back to host
+    hipMemcpy(h_c, d_c, bytes, hipMemcpyDeviceToHost);
+
+    // Verify result
+    int errors = 0;
+    for (int i = 0; i < N; i++) {
+        float expected = h_a[i] + h_b[i];
+        if (h_c[i] != expected) {
+            printf("Mismatch at index %d: got %f, expected %f\n", i, h_c[i], expected);
+            errors++;
+        }
+    }
+
+    if (errors == 0) {
+        printf("Vector addition successful! All %d elements verified.\n", N);
+    }
+
+    // Free memory
+    hipFree(d_a);
+    hipFree(d_b);
+    hipFree(d_c);
+    free(h_a);
+    free(h_b);
+    free(h_c);
+
+    return errors == 0 ? 0 : 1;
+}
+```
+
+### Compile and run
+
+Compile with `hipcc`, the HIP compiler driver included with ROCm:
+
+```bash
+hipcc vector_add.cpp -o vector_add
+./vector_add
+```
+
+Expected output:
+
+```text
+Vector addition successful! All 1024 elements verified.
+```
+
+<Note>
+  `hipcc` is a compiler driver that wraps Clang with the appropriate HIP include paths and library flags. It targets your installed AMD GPU architecture automatically. You can pass standard C++ flags such as `-O3` and `-std=c++17`.
+</Note>
+
+---
+
+## Troubleshooting
+
+**GPU not detected by `rocminfo`**
+
+- Confirm the `amdgpu` kernel module is loaded: `lsmod | grep amdgpu`
+- Check that your user is in the `render` and `video` groups: `groups $USER`
+- Reboot after installing ROCm if the kernel module was not previously loaded
+
+**`hipcc` not found**
+
+- Ensure `/opt/rocm/bin` is in your `PATH`: `echo $PATH`
+- Source your shell config: `source ~/.bashrc`
+
+**Permission denied on GPU device**
+
+- Add your user to the `render` group: `sudo usermod -aG render $USER`
+- Log out and back in for the change to take effect
+
+For more detailed troubleshooting, see the ROCm installation FAQ in the [compatibility matrix](/reference/compatibility-matrix) documentation.
+
+---
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="ROCm for AI" icon="brain" href="/guides/rocm-for-ai">
+    Set up PyTorch or TensorFlow on ROCm and run AI training and inference workloads.
+  </Card>
+  <Card title="ROCm for HPC" icon="microchip" href="/guides/rocm-for-hpc">
+    Use ROCm math and communication libraries for scientific computing and simulation.
+  </Card>
+  <Card title="Programming models" icon="code" href="/concepts/programming-models">
+    Learn HIP, OpenCL, and OpenMP for writing GPU-accelerated programs.
+  </Card>
+  <Card title="Compatibility matrix" icon="table" href="/reference/compatibility-matrix">
+    Check which GPUs, OS versions, and frameworks are supported in your ROCm release.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

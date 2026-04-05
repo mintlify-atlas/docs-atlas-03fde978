@@ -1,0 +1,236 @@
+---
+title: "GPU architecture"
+description: AMD GPU architecture overview for ROCm development
+keywords: [GPU architecture, CDNA, RDNA, Instinct, Compute Units, wavefront, HBM, ROCm]
+---
+
+ROCm supports two main AMD GPU architecture families: **CDNA** (Compute DNA), targeting HPC and AI workloads on AMD Instinct accelerators, and **RDNA** (Radeon DNA), targeting graphics and compute on Radeon GPUs. Each generation improves compute density, memory bandwidth, and support for new data types.
+
+<CardGroup cols={2}>
+  <Card title="CDNA architecture" icon="microchip" href="/concepts/gpu-architecture#cdna-architecture-instinct-series">
+    AMD Instinct MI-series accelerators optimized for HPC, AI, and ML workloads at datacenter scale.
+  </Card>
+  <Card title="RDNA architecture" icon="bolt" href="/concepts/gpu-architecture#rdna-architecture-radeon-series">
+    AMD Radeon GPU architecture for graphics and general-purpose compute.
+  </Card>
+  <Card title="Hardware specifications" icon="table" href="/concepts/gpu-architecture#hardware-specifications">
+    Full specification tables for MI-series and Radeon GPUs including CUs, VRAM, and cache sizes.
+  </Card>
+  <Card title="Architectural concepts" icon="book" href="/concepts/gpu-architecture#key-architectural-concepts">
+    Compute Units, wavefronts, SIMD units, and the GPU memory hierarchy explained.
+  </Card>
+</CardGroup>
+
+## CDNA architecture (Instinct series)
+
+<Tabs>
+  <Tab title="CDNA4 — MI350 / MI355X">
+    The CDNA4 architecture (LLVM target `gfx950`) powers the AMD Instinct MI350X and MI355X accelerators. It continues the multi-XCD chiplet design introduced with CDNA3, with 8 XCDs per package providing up to 256 active Compute Units (32 per XCD).
+
+    **Key improvements over CDNA3:**
+    - Up to 288 GiB of HBM3 memory
+    - 256 MiB L3 cache
+    - 160 KiB Local Data Share (LDS) per CU
+    - Enhanced Matrix Core support for AI inference data types
+
+    | Spec | MI355X / MI350X |
+    |------|----------------|
+    | Architecture | CDNA4 |
+    | LLVM target | gfx950 |
+    | VRAM | 288 GiB HBM3 |
+    | Compute Units | 256 (32 per XCD) |
+    | Wavefront size | 64 |
+    | LDS | 160 KiB |
+    | L3 cache | 256 MiB |
+    | L2 cache | 32 MiB (4 per XCD) |
+    | VGPR file | 512 KiB |
+  </Tab>
+  <Tab title="CDNA3 — MI300 series">
+    The CDNA3 architecture (LLVM target `gfx942`) powers the AMD Instinct MI300X, MI300A, and MI325X. It introduces the **Accelerated Complex Die (XCD)** as the fundamental GPU compute building block.
+
+    Each XCD contains 40 Compute Units (38 active, 2 reserved for yield management), four Asynchronous Compute Engines (ACEs), and a 4 MiB L2 cache. The MI300X integrates 8 XCDs, 4 I/O dies, and 8 stacks of HBM3 via AMD Infinity Fabric, providing up to 304 active CUs.
+
+    The MI300A is an Accelerated Processing Unit (APU) that combines CPU cores (AMD EPYC) with 6 XCDs (228 active CUs) and 128 GiB of unified HBM3 memory shared between CPU and GPU.
+
+    **CDNA3 Matrix Core improvements over CDNA2:**
+    - 3× throughput for FP16 and BF16
+    - 6.8× throughput for INT8
+    - 16× throughput for FP8 vs FP32
+    - New TF32 support with 4× throughput vs FP32
+
+    | Spec | MI300X | MI300A | MI325X |
+    |------|--------|--------|--------|
+    | LLVM target | gfx942 | gfx942 | gfx942 |
+    | VRAM | 192 GiB | 128 GiB | 256 GiB |
+    | Compute Units | 304 | 228 | 304 |
+    | Wavefront size | 64 | 64 | 64 |
+    | LDS | 64 KiB | 64 KiB | 64 KiB |
+    | L3 cache | 256 MiB | 256 MiB | 256 MiB |
+    | Peak memory BW | 5.3 TB/s | — | — |
+
+    **MI300X peak performance (selected data types):**
+
+    | Data type | FLOPS/clock/CU | Peak TFLOPS |
+    |-----------|---------------|-------------|
+    | Matrix FP64 | 256 | 163.4 |
+    | Vector FP64 | 128 | 81.7 |
+    | Matrix FP32 | 256 | 163.4 |
+    | Vector TF32 | 1024 | 653.7 |
+    | Matrix FP16 | 2048 | 1307.4 |
+    | Matrix BF16 | 2048 | 1307.4 |
+    | Matrix FP8 | 4096 | 2614.9 |
+    | Matrix INT8 | 4096 | 2614.9 |
+
+    The MI300X OAMs attach to the host system via PCIe Gen 5 x16 links. In an 8-GPU node, seven AMD Infinity Fabric links per GPU form a fully connected GPU fabric.
+  </Tab>
+  <Tab title="CDNA2 — MI250 series">
+    The CDNA2 architecture (LLVM target `gfx90a`) powers the AMD Instinct MI250X, MI250, and MI210. It uses a **Graphics Compute Die (GCD)** structure: the MI250X and MI250 are dual-GCD packages, each GCD presenting as a separate GPU device.
+
+    Each GCD has 104 active CUs (MI250), organized into four SIMD units per CU. Each SIMD unit processes 16 FP64 elements per instruction, so a full wavefront of 64 elements occupies all four SIMDs simultaneously. The MI250 GCD peaks at 22.6 TFLOPS (vector FP64) at 1.7 GHz clock.
+
+    Memory uses HBM2e: 1.6 TB/s peak bandwidth per GCD, 3.2 TB/s total for the dual-GCD MI250X OAM.
+
+    | Spec | MI250X | MI250 | MI210 |
+    |------|--------|-------|-------|
+    | LLVM target | gfx90a | gfx90a | gfx90a |
+    | VRAM | 128 GiB | 128 GiB | 64 GiB |
+    | Compute Units | 220 | 208 | 104 |
+    | Wavefront size | 64 | 64 | 64 |
+    | L2 cache | 16 MiB | 16 MiB | 8 MiB |
+    | Peak memory BW | 3.2 TB/s | 3.2 TB/s | 1.6 TB/s |
+
+    **MI250 OAM peak performance (both GCDs):**
+
+    | Data type | FLOPS/clock/CU | Peak TFLOPS |
+    |-----------|---------------|-------------|
+    | Matrix FP64 | 256 | 90.5 |
+    | Vector FP64 | 128 | 45.3 |
+    | Matrix FP32 | 256 | 90.5 |
+    | Matrix FP16 | 1024 | 362.1 |
+    | Matrix BF16 | 1024 | 362.1 |
+    | Matrix INT8 | 1024 | 362.1 |
+
+    The GCDs within an OAM connect via four AMD Infinity Fabric links at 25 GT/s, giving 200 GB/s peak transfer rate between GCDs (400 GB/s bidirectional).
+  </Tab>
+  <Tab title="CDNA1 — MI100">
+    The CDNA1 architecture (LLVM target `gfx908`) is the first AMD Instinct generation to separate graphics from compute, focusing exclusively on HPC and AI workloads.
+
+    The MI100 has 120 Compute Units organized into 8 Shader Engines (15 CUs each). Each CU contains four SIMD units that process 16-element SIMD instructions, enabling 64-wide wavefront execution. Four stacks of HBM2 provide 32 GiB of memory with a 4,096-bit memory interface at 1.228 TB/s peak bandwidth.
+
+    Each CU holds up to 10 concurrent wavefronts. The CU allocates 256 VGPRs and 800 SGPRs dynamically. VGPR usage directly affects wavefront occupancy — for example, using 119 VGPRs limits the CU to 2 concurrent wavefronts.
+
+    **MI100 peak performance:**
+
+    | Data type | FLOPS/clock/CU | Peak TFLOPS |
+    |-----------|---------------|-------------|
+    | Vector FP64 | 64 | 11.5 |
+    | Matrix FP32 | 256 | 46.1 |
+    | Vector FP32 | 128 | 23.1 |
+    | Matrix FP16 | 1024 | 184.6 |
+    | Matrix BF16 | 512 | 92.3 |
+
+    The MI100 connects to host processors via PCIe Gen 4 x16 links (16 GT/s). Up to four GPUs in a node can form a fully connected fabric using AMD Infinity Fabric bridge cards at 23 GT/s.
+  </Tab>
+</Tabs>
+
+## RDNA architecture (Radeon series)
+
+<Tabs>
+  <Tab title="RDNA4">
+    RDNA4 (LLVM targets `gfx1200`, `gfx1201`) is the latest Radeon GPU architecture, featuring improved compute density and new AI acceleration capabilities. RDNA4 GPUs support wavefront sizes of 32 or 64 depending on the workload.
+
+    | Spec | Radeon RX 9070 XT | Radeon AI PRO R9700 |
+    |------|------------------|---------------------|
+    | LLVM target | gfx1201 | gfx1201 |
+    | VRAM | 16 GiB | 32 GiB |
+    | Compute Units | 64 | 64 |
+    | Wavefront size | 32 or 64 | 32 or 64 |
+    | LDS | 128 KiB | 128 KiB |
+    | L2 cache | 8 MiB | 8 MiB |
+    | VGPR file | 768 KiB | 768 KiB |
+
+    <Note>
+      RDNA4 ISA documentation is available in the [AMD RDNA4 Instruction Set Architecture](https://www.amd.com/content/dam/amd/en/documents/radeon-tech-docs/instruction-set-architectures/rdna4-instruction-set-architecture.pdf) reference.
+    </Note>
+  </Tab>
+  <Tab title="RDNA3">
+    RDNA3 (LLVM targets `gfx1100`, `gfx1101`, `gfx1102`) powers the Radeon RX 7000 series and Radeon PRO W7000 series. It introduces a chiplet design with a dedicated Graphics Compute Die and Memory Cache Die, and adds support for an Infinity Cache for higher effective memory bandwidth.
+
+    | Spec | RX 7900 XTX | Radeon PRO W7900 |
+    |------|-------------|------------------|
+    | LLVM target | gfx1100 | gfx1100 |
+    | VRAM | 24 GiB | 48 GiB |
+    | Compute Units | 96 | 96 |
+    | Wavefront size | 32 or 64 | 32 or 64 |
+    | LDS | 128 KiB | 128 KiB |
+    | Infinity Cache | 96 MiB | 96 MiB |
+    | L2 cache | 6 MiB | 6 MiB |
+    | VGPR file | 768 KiB | 768 KiB |
+  </Tab>
+</Tabs>
+
+## Key architectural concepts
+
+### Compute Units (CUs)
+
+A Compute Unit is the fundamental execution building block of AMD GPUs. Each CU contains:
+
+- **Four SIMD units**, each capable of processing 16 data elements per instruction
+- **Vector General Purpose Registers (VGPRs)**: hold per-lane data for the 64 lanes of a wavefront
+- **Scalar General Purpose Registers (SGPRs)**: hold data common to all lanes in a wavefront
+- **Local Data Share (LDS)**: fast on-chip shared memory accessible by all threads in a workgroup
+- **L1 instruction cache** and **L1 scalar cache** shared across CU pairs
+- **L1 vector cache** (also called L0 on RDNA) per CU pair
+
+### Wavefronts
+
+A **wavefront** (analogous to a CUDA warp) is the fundamental unit of execution on AMD GPUs. A wavefront is a group of 64 threads (or 32 on RDNA) that execute the same instruction in lockstep across the four SIMD units of a CU.
+
+- On CDNA hardware, wavefront size is always **64**
+- On RDNA hardware, wavefront size is **32 or 64** (determined at dispatch)
+- Multiple wavefronts can be in flight on a single CU simultaneously (occupancy), hiding memory latency through context switching
+
+### SIMD units
+
+Each CU has four SIMD-16 units. For a 64-wide wavefront:
+
+- Each SIMD unit handles 16 lanes
+- All four SIMDs execute the same instruction in the same clock cycle
+- For FP64 double-precision operations, this yields 64 FP64 results per clock per CU
+
+### Memory hierarchy
+
+AMD GPU memory is organized in a hierarchy of decreasing speed and increasing size:
+
+| Level | Type | Scope | Typical size |
+|-------|------|-------|-------------|
+| Registers (VGPR/SGPR) | On-chip | Per wavefront | 512 KiB (CDNA3) |
+| LDS | On-chip | Per workgroup | 64–160 KiB per CU |
+| L1 cache | On-chip | Per CU or CU pair | 16–32 KiB |
+| L2 cache | On-chip | Per GCD/XCD | 4–8 MiB |
+| L3 / Infinity Cache | On-chip | Per package | 256 MiB (CDNA3/4) |
+| HBM / GDDR | Off-chip | Global | 16–288 GiB |
+
+**High Bandwidth Memory (HBM)** is used on all Instinct MI-series GPUs. HBM stacks are placed adjacent to the GPU die using 2.5D packaging, providing extremely wide memory buses (4,096 bits on MI100) with peak bandwidths of 1.2–5.3 TB/s depending on generation.
+
+**Local Data Share (LDS)** is a fast scratchpad memory shared among all threads in a workgroup. It is software-managed and must be explicitly used in kernel code. Efficient LDS usage is critical for memory-bound kernels.
+
+## Hardware specifications
+
+The following table covers key MI-series Instinct GPU hardware specifications.
+
+| Name | Architecture | LLVM target | VRAM (GiB) | Compute Units | Wavefront | LDS (KiB) | L3 Cache (MiB) | L2 Cache (MiB) |
+|------|-------------|-------------|-----------|---------------|-----------|-----------|---------------|---------------|
+| MI355X | CDNA4 | gfx950 | 288 | 256 | 64 | 160 | 256 | 32 |
+| MI350X | CDNA4 | gfx950 | 288 | 256 | 64 | 160 | 256 | 32 |
+| MI325X | CDNA3 | gfx942 | 256 | 304 | 64 | 64 | 256 | 32 |
+| MI300X | CDNA3 | gfx942 | 192 | 304 | 64 | 64 | 256 | 32 |
+| MI300A | CDNA3 | gfx942 | 128 | 228 | 64 | 64 | 256 | 24 |
+| MI250X | CDNA2 | gfx90a | 128 | 220 | 64 | 64 | — | 16 |
+| MI250 | CDNA2 | gfx90a | 128 | 208 | 64 | 64 | — | 16 |
+| MI210 | CDNA2 | gfx90a | 64 | 104 | 64 | 64 | — | 8 |
+| MI100 | CDNA1 | gfx908 | 32 | 120 | 64 | 64 | — | 8 |
+
+<Note>
+  For the full specification table including Radeon PRO, Radeon consumer, and AMD Ryzen APU hardware, see the [GPU hardware specifications](/reference/gpu-specs) reference page.
+</Note>

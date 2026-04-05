@@ -1,0 +1,272 @@
+---
+title: "File structure"
+description: ROCm installation directory layout on Linux (Linux FHS compliance)
+keywords: [ROCm, file structure, FHS, Linux, installation, directory, environment variables, GPU isolation]
+---
+
+ROCm follows the [Linux Filesystem Hierarchy Standard (FHS)](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html) to ensure consistency with standard open source conventions. This page describes where ROCm installs files, how to configure your environment to use them, and how to control which GPUs are visible to your applications.
+
+## Installation layout
+
+ROCm installs into a versioned directory under `/opt/`:
+
+```bash
+/opt/rocm-<ver>/
+```
+
+A symlink `/opt/rocm` points to the currently active versioned installation:
+
+```bash
+$ ls -la /opt/ | grep rocm
+drwxr-xr-x  rocm-6.2.0/
+lrwxrwxrwx  rocm -> rocm-6.2.0/
+```
+
+The full directory structure follows FHS conventions:
+
+```bash
+/opt/rocm-<ver>/
+├── bin/                        # Public executables (hipcc, rocm-smi, rocminfo, ...)
+├── lib/
+│   ├── libamdhip64.so          # Public shared libraries (soname versioned)
+│   ├── librocblas.so
+│   ├── <component>/            # Architecture-dependent internal libraries
+│   └── cmake/
+│       └── <component>/
+│           └── <component>-config.cmake
+├── libexec/
+│   └── <component>/            # Non-ISA executables used internally by components
+├── include/
+│   └── <component>/            # Public header files
+│       └── *.h
+└── share/
+    ├── html/<component>/       # HTML documentation
+    ├── info/<component>/       # Info pages
+    ├── man/<component>/        # Man pages
+    ├── doc/<component>/        # License files
+    └── <component>/
+        └── samples/            # Sample code and architecture-independent misc files
+```
+
+## Key directories
+
+<CardGroup cols={2}>
+  <Card title="/opt/rocm/bin" icon="terminal">
+    Public executables: `hipcc`, `rocm-smi`, `rocminfo`, `rocm-bandwidth-test`, and other command-line tools.
+  </Card>
+  <Card title="/opt/rocm/lib" icon="layer-group">
+    Shared libraries for linking applications. Libraries use standard soname versioning: `lib<name>.so → lib<name>.so.<major> → lib<name>.so.<major>.<minor>.<patch>`.
+  </Card>
+  <Card title="/opt/rocm/include" icon="file-code">
+    Public header files organized by component (e.g., `include/hip/hip_runtime.h`, `include/rocblas/rocblas.h`).
+  </Card>
+  <Card title="/opt/rocm/lib/cmake" icon="settings">
+    CMake configuration files for each component, enabling `find_package(hip)`, `find_package(rocblas)`, and similar.
+  </Card>
+</CardGroup>
+
+## Library naming conventions
+
+ROCm shared libraries follow standard soname versioning. For example, the HIP runtime library:
+
+```bash
+/opt/rocm/lib/libamdhip64.so        → libamdhip64.so.6
+/opt/rocm/lib/libamdhip64.so.6      → libamdhip64.so.6.2.0
+/opt/rocm/lib/libamdhip64.so.6.2.0  (actual file)
+```
+
+Applications should link against the unversioned name (`-lamdhip64`) so the linker resolves to the appropriate soname at build time.
+
+## Environment variables
+
+Set the following environment variables to make ROCm tools and libraries available in your shell session.
+
+```bash
+# Add ROCm executables to PATH
+export PATH=/opt/rocm/bin:$PATH
+
+# Add ROCm libraries to the dynamic linker search path
+export LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH
+
+# Help CMake find ROCm packages
+export CMAKE_PREFIX_PATH=/opt/rocm:$CMAKE_PREFIX_PATH
+```
+
+Add these lines to your `~/.bashrc` or `~/.profile` to persist them across sessions.
+
+<Tip>
+  On systems where ROCm was installed via the package manager (apt, dnf, zypper), the `PATH` and `LD_LIBRARY_PATH` entries may already be configured in `/etc/profile.d/rocm.sh`. Verify with `which hipcc` and `hipcc --version`.
+</Tip>
+
+## Symlink structure
+
+The unversioned `/opt/rocm` symlink lets scripts and build systems use a stable path regardless of which ROCm version is installed:
+
+```bash
+# Both paths resolve to the same installation
+ls /opt/rocm/bin/hipcc
+ls /opt/rocm-6.2.0/bin/hipcc
+```
+
+To switch between installed ROCm versions, update the symlink:
+
+```bash
+sudo ln -sfn /opt/rocm-6.1.0 /opt/rocm
+```
+
+## Backward compatibility
+
+The FHS layout was introduced in ROCm 5.2. Before that, components each had their own directory (e.g., `/opt/rocm/hip/`, `/opt/rocm/hsa/`). Backward compatibility symlinks were added to ease the transition.
+
+```bash
+# Old location — legacy symlink (deprecated)
+$ ls -l /opt/rocm/hip/bin/
+lrwxrwxrwx  hipcc -> ../../bin/hipcc
+
+# Old library location — legacy symlink (deprecated)
+$ ls -l /opt/rocm/hip/lib/
+lrwxrwxrwx  libamdhip64.so -> ../../lib/libamdhip64.so
+```
+
+<Warning>
+  Backward compatibility symlinks and wrapper header files were deprecated in ROCm 5.2 and removed in ROCm 6.0. Update your build scripts and `#include` paths to use the new FHS locations.
+</Warning>
+
+### Updating your application for FHS
+
+<Steps>
+  <Step title="Update include paths">
+    Change component-prefixed includes to use the new unified `include/` path:
+
+    ```cpp
+    // Old (deprecated)
+    #include <hip.h>
+
+    // New (FHS-compliant)
+    #include <hip/hip_runtime.h>
+    ```
+  </Step>
+  <Step title="Update CMake and Makefile variables">
+    Replace component-specific path variables with the ROCm root:
+
+    ```cmake
+    # Old
+    set(HIP_PATH /opt/rocm/hip)
+
+    # New
+    set(ROCM_PATH /opt/rocm)
+    find_package(hip REQUIRED HINTS ${ROCM_PATH}/lib/cmake/hip)
+    ```
+  </Step>
+  <Step title="Update binary and library paths">
+    Replace `/opt/rocm/<component>/bin` and `/opt/rocm/<component>/lib` with the unified paths:
+
+    ```bash
+    # Old
+    /opt/rocm/hip/bin/hipcc
+    /opt/rocm/hip/lib/libamdhip64.so
+
+    # New
+    /opt/rocm/bin/hipcc
+    /opt/rocm/lib/libamdhip64.so
+    ```
+  </Step>
+</Steps>
+
+## Versioning scheme
+
+ROCm version numbers follow semantic versioning: `rocm-<x.y.z>` where:
+
+| Field | Meaning |
+|-------|---------|
+| `x` (MAJOR) | Incompatible API changes |
+| `y` (MINOR) | Backward-compatible new functionality |
+| `z` (PATCH) | Backward-compatible bug fixes |
+
+## GPU isolation
+
+GPU isolation restricts which GPUs are visible to a specific application or process. This is useful for multi-tenant systems, CI/CD pipelines, and resource management.
+
+<Warning>
+  Environment variable-based isolation is not secure for untrusted applications — a process can reset environment variables before initializing the ROCm runtime. Use Docker or VM passthrough for stronger isolation.
+</Warning>
+
+### Environment variables
+
+<AccordionGroup>
+  <Accordion title="ROCR_VISIBLE_DEVICES">
+    Controls which GPUs are exposed to all applications using the ROCm Software Runtime (the full user-mode ROCm stack). Accepts a comma-separated list of device indices or UUIDs.
+
+    ```bash
+    # Expose the first GPU and a GPU identified by UUID
+    export ROCR_VISIBLE_DEVICES="0,GPU-4b2c1a9f-8d3e-6f7a-b5c9-2e4d8a1f6c3b"
+    ```
+
+    **Scope**: All applications using the ROCm software runtime.
+  </Accordion>
+  <Accordion title="HIP_VISIBLE_DEVICES">
+    Restricts which GPUs are visible to HIP applications specifically.
+
+    ```bash
+    # Expose the first and third GPUs (zero-indexed)
+    export HIP_VISIBLE_DEVICES="0,2"
+    ```
+
+    **Scope**: HIP applications on AMD hardware only.
+  </Accordion>
+  <Accordion title="GPU_DEVICE_ORDINAL">
+    Exposes a subset of devices to OpenCL and HIP applications using the ROCclr abstraction layer.
+
+    ```bash
+    # Expose the first and third GPUs
+    export GPU_DEVICE_ORDINAL="0,2"
+    ```
+
+    **Scope**: HIP and OpenCL applications using the ROCclr layer.
+  </Accordion>
+  <Accordion title="CUDA_VISIBLE_DEVICES">
+    Provided for CUDA compatibility. On AMD hardware, has the same effect as `HIP_VISIBLE_DEVICES`.
+
+    ```bash
+    export CUDA_VISIBLE_DEVICES="0,1"
+    ```
+
+    **Scope**: HIP applications on AMD, CUDA applications on NVIDIA.
+  </Accordion>
+  <Accordion title="OMP_DEFAULT_DEVICE">
+    Sets the default device for OpenMP target offloading.
+
+    ```bash
+    # Use the third GPU as the OpenMP offload target
+    export OMP_DEFAULT_DEVICE="2"
+    ```
+
+    **Scope**: OpenMP applications.
+  </Accordion>
+</AccordionGroup>
+
+### Docker
+
+Docker uses Linux kernel namespaces to isolate GPU access. Granting GPU access to a container is explicit — by default containers have no GPU access. This isolation applies to all programs using the `amdgpu` kernel module, including non-ROCm applications (OpenGL, Vulkan).
+
+To run a container with ROCm GPU access:
+
+```bash
+# Grant access to all GPUs
+docker run --device /dev/kfd --device /dev/dri \
+           --group-add video --group-add render \
+           rocm/rocm-terminal:latest
+
+# Restrict to specific GPUs using renderD device nodes
+docker run --device /dev/kfd \
+           --device /dev/dri/renderD128 \
+           --device /dev/dri/renderD129 \
+           --group-add video --group-add render \
+           rocm/rocm-terminal:latest
+```
+
+### GPU passthrough to virtual machines
+
+Virtual machines provide the strongest isolation — even the VM kernel is isolated from the host. GPUs can be passed to VMs using PCIe passthrough, enabling GPU use with different operating systems.
+
+ROCm officially supports [VMware ESXi](https://www.vmware.com/products/esxi-and-esx.html) for GPU passthrough on select Instinct MI-series GPUs.

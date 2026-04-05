@@ -1,0 +1,123 @@
+---
+title: "Environment variables"
+description: "ROCm and HIP environment variables for configuring GPU behavior"
+keywords: ["ROCm", "environment variables", "HIP", "ROCR", "GPU", "configuration", "ROCR_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES"]
+---
+
+ROCm provides environment variables for configuring GPU selection, runtime behavior, debugging, memory management, profiling, and library-specific tuning. These variables apply to the HIP runtime, the ROCR runtime, the HIPCC compiler, and individual libraries.
+
+<Note>
+The HIP and ROCR-Runtime environment variable tables are sourced from the upstream `rocm-systems` repository and updated with each release. The values documented here reflect current ROCm behavior but may change between versions.
+</Note>
+
+## GPU visibility and selection
+
+These variables control which GPUs are visible to ROCm applications.
+
+| Variable | Description | Valid Values | Default |
+|----------|-------------|--------------|---------|
+| `ROCR_VISIBLE_DEVICES` | Restricts which GPU devices are visible to the ROCr runtime. Accepts a comma-separated list of device indices or UUIDs. | Comma-separated integers or GPU UUIDs | All devices |
+| `HIP_VISIBLE_DEVICES` | Restricts which GPU devices are visible to HIP applications. Equivalent to `ROCR_VISIBLE_DEVICES` for HIP usage. | Comma-separated integers | All devices |
+| `CUDA_VISIBLE_DEVICES` | HIP respects this CUDA compatibility variable for selecting devices when `HIP_VISIBLE_DEVICES` is not set. | Comma-separated integers | All devices |
+
+```bash
+# Make only the first and third GPU visible
+export ROCR_VISIBLE_DEVICES=0,2
+
+# Equivalent for HIP applications
+export HIP_VISIBLE_DEVICES=0,2
+```
+
+## HIP runtime variables
+
+### Debug variables
+
+| Variable | Description | Valid Values | Default |
+|----------|-------------|--------------|---------|
+| `HIP_LAUNCH_BLOCKING` | Forces synchronous kernel execution. All kernel launches block until the kernel completes. Useful for debugging and isolating errors. | `0` (async), `1` (blocking) | `0` |
+| `HIP_PRINT_ENV` | Prints a list of all HIP environment variables and their current values at application startup. | `0`, `1` | `0` |
+| `HIP_DB` | Enables HIP debug output for specific subsystems. Multiple flags can be combined. | Hex bitmask | `0` |
+| `AMD_LOG_LEVEL` | Controls the verbosity of AMD runtime logging. Higher values produce more output. | `0`–`5` | `0` |
+| `AMD_LOG_MASK` | Bitmask filtering which categories of AMD log messages are emitted. | Hex bitmask | `0x7FFFFFFF` |
+| `GPU_ENABLE_HW_DEBUG` | Enables hardware-level debugging support for wavefront inspection and GPU exception handling. | `0`, `1` | `0` |
+
+```bash
+# Enable blocking kernel launches for debugging
+export HIP_LAUNCH_BLOCKING=1
+
+# Print all HIP environment variables at startup
+export HIP_PRINT_ENV=1
+```
+
+### Memory management variables
+
+| Variable | Description | Valid Values | Default |
+|----------|-------------|--------------|---------|
+| `GPU_MAX_HEAP_SIZE` | Sets the maximum GPU heap size as a percentage of available GPU memory. | `0`–`100` (percent) | `100` |
+| `GPU_MAX_ALLOC_PERCENT` | Maximum percentage of GPU memory that can be allocated by a single allocation call. | `0`–`100` (percent) | `100` |
+| `HIP_HIDDEN_FREE_MEM` | Reserves a portion of GPU memory (in MiB) and hides it from `hipMemGetInfo`. Useful for testing low-memory scenarios. | Integer (MiB) | `0` |
+| `HSA_ENABLE_SDMA` | Enables or disables the System DMA engine for memory copy operations between host and device. Disabling falls back to compute-based copies. | `0` (disable), `1` (enable) | `1` |
+
+### Profiling variables
+
+| Variable | Description | Valid Values | Default |
+|----------|-------------|--------------|---------|
+| `HIP_TRACE_API` | Enables tracing of HIP API calls. Output is written to stderr. | `0`, `1` | `0` |
+| `HIP_TRACE_API_COLOR` | Controls whether HIP API trace output uses terminal color codes. | `0`, `1` | `1` |
+| `ROCPROFILER_ENABLE` | Enables the ROCprofiler for performance counter collection. | `0`, `1` | `0` |
+
+### Miscellaneous HIP variables
+
+| Variable | Description | Valid Values | Default |
+|----------|-------------|--------------|---------|
+| `HIP_FORCE_DEV_KERNARG` | Forces kernel arguments to be placed in device memory rather than host memory. | `0`, `1` | `0` |
+| `HIP_HOST_COHERENT` | Controls whether host memory allocated with `hipHostMalloc` is coherent. | `0`, `1` | `0` |
+| `HIP_PLATFORM` | Selects the HIP platform. Relevant when both AMD and NVIDIA hardware is present. | `amd`, `nvidia` | `amd` |
+
+## ROCR-Runtime variables
+
+These variables control the HSA (Heterogeneous System Architecture) runtime that underlies HIP.
+
+| Variable | Description | Valid Values | Default |
+|----------|-------------|--------------|---------|
+| `HSA_ENABLE_SDMA` | Enables System DMA engines for copy operations. Set to `0` to force compute shader-based copies (useful for debugging DMA issues). | `0`, `1` | `1` |
+| `HSA_ENABLE_INTERRUPT` | Enables interrupt-based signal notification instead of busy-waiting. | `0`, `1` | `1` |
+| `HSA_TOOLS_LIB` | Specifies a colon-separated list of HSA tool libraries to load at runtime (used by profiling tools). | Library path(s) | Not set |
+| `HSA_OVERRIDE_GFX_VERSION` | Overrides the detected GFX IP version reported by the runtime. Used to test forward compatibility or work around version mismatches. | `major.minor.stepping` | Not set |
+
+## HIPCC compiler variables
+
+| Variable | Description | Valid Values | Default |
+|----------|-------------|--------------|---------|
+| `HIPCC_VERBOSE` | Controls verbosity of the HIPCC driver. Higher values print more information about compiler invocations. | `0`–`7` | `0` |
+| `HIPCC_COMPILE_FLAGS_APPEND` | Appends additional flags to every HIPCC compilation command. | Compiler flags | Not set |
+| `HIPCC_LINK_FLAGS_APPEND` | Appends additional flags to every HIPCC link command. | Linker flags | Not set |
+| `HIP_CLANG_PATH` | Overrides the path to the `amdclang++` binary used by HIPCC. | Directory path | Auto-detected |
+| `HIP_ROCCLR_HOME` | Overrides the ROCclr (common language runtime) installation directory. | Directory path | Auto-detected |
+
+## Library-specific variables
+
+Many ROCm libraries define their own environment variables for tuning, logging, and debugging. The table below provides an overview.
+
+| Library | Purpose |
+|---------|---------|
+| **hipBLASLt** | Manage logging, debugging, offline tuning, and stream-K configuration |
+| **hipSPARSELt** | Control logging, debugging, and performance monitoring |
+| **rocBLAS** | Performance tuning, kernel selection, logging, and debugging for BLAS operations |
+| **rocSHMEM** | Control the behavior of the rocSHMEM networking library |
+| **rocSOLVER** | Control logging of rocSOLVER operations |
+| **rocSPARSE** | Control logging of rocSPARSE operations |
+| **MIGraphX** | Control debugging, testing, and model performance tuning |
+| **MIOpen** | Control logging, debugging, find mode, and algorithm behavior |
+| **MIVisionX** | Control OpenVX, GPU/device, debugging, stitching, and neural network parameters |
+| **RCCL** | Control logging, debugging, compiler and assembly behavior, and cache |
+| **RPP** | Logging, debugging, compiler, assembly management, and cache control |
+| **Tensile** | Enable testing, debugging, and experimental features |
+
+### rocALUTION
+
+<ParamField path="ROCALUTION_LAYER" type="integer" default="not set">
+  If set to `1`, enables file logging. Logs each rocALUTION function call including object constructor/destructor, memory allocation, data transfers, and all function calls for matrices, vectors, solvers, and preconditioners. The log file is placed in the current working directory.
+
+  Valid values: `1` (enable trace file logging)
+</ParamField>

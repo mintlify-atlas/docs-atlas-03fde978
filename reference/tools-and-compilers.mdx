@@ -1,0 +1,148 @@
+---
+title: "Tools and compilers"
+description: "ROCm development tools, profilers, debuggers, and compilers"
+keywords: ["ROCm", "tools", "compilers", "profiler", "debugger", "HIPCC", "LLVM", "HIP", "rocprofiler"]
+---
+
+ROCm provides a full suite of development tools spanning system management, performance analysis, debugging, and compilation. These tools cover the entire development lifecycle for GPU-accelerated applications on AMD hardware.
+
+<CardGroup cols={2}>
+  <Card title="System management" icon="server" href="#system-management">
+    Monitor, configure, and validate AMD GPU installations
+  </Card>
+  <Card title="Performance and profiling" icon="chart-line" href="#performance-and-profiling">
+    Profile kernels, trace calls, and measure bandwidth
+  </Card>
+  <Card title="Development tools" icon="wrench" href="#development-tools">
+    Debug GPU code, port from CUDA, and manage builds
+  </Card>
+  <Card title="Compilers" icon="code" href="#compilers">
+    Compile HIP, OpenMP, and Fortran code for AMD GPUs
+  </Card>
+</CardGroup>
+
+## System management
+
+System management tools allow administrators and developers to monitor GPU health, validate installations, and manage devices in cluster environments.
+
+<CardGroup cols={2}>
+  <Card title="AMD SMI" icon="gauge" href="https://github.com/ROCm/amdsmi">
+    Command-line utility to query, monitor, and manage AMD GPU state, providing hardware information and performance metrics.
+  </Card>
+  <Card title="ROCm SMI" icon="activity" href="https://github.com/ROCm/rocm_smi_lib">
+    C library for Linux providing a user-space interface for applications to monitor and control GPU behavior.
+  </Card>
+  <Card title="rocminfo" icon="info" href="https://github.com/ROCm/rocminfo">
+    Reports system information including agent properties, memory regions, and ISA support for all detected ROCm devices.
+  </Card>
+  <Card title="ROCm Data Center Tool" icon="building" href="https://github.com/ROCm/rdc">
+    Simplifies administration and addresses key infrastructure challenges for AMD GPUs in cluster and data-center environments.
+  </Card>
+  <Card title="ROCm Validation Suite" icon="check-circle" href="https://github.com/ROCm/ROCmValidationSuite">
+    Detects and troubleshoots common problems affecting AMD GPUs in high-performance computing environments.
+  </Card>
+</CardGroup>
+
+## Performance and profiling
+
+Profiling tools help identify bottlenecks, measure kernel throughput, and analyze memory and compute utilization.
+
+<CardGroup cols={2}>
+  <Card title="ROCm Compute Profiler" icon="cpu" href="https://github.com/ROCm/rocprofiler-compute">
+    Kernel-level profiling for machine learning and HPC workloads. Provides detailed hardware counter analysis per compute unit.
+  </Card>
+  <Card title="ROCm Systems Profiler" icon="layers" href="https://github.com/ROCm/rocprofiler-systems">
+    Comprehensive profiling and tracing of applications running on the CPU or both CPU and GPU simultaneously.
+  </Card>
+  <Card title="ROCprofiler-SDK" icon="terminal" href="https://github.com/ROCm/rocprofiler-sdk">
+    Toolkit for developing analysis tools for profiling and tracing GPU compute applications. Provides the `rocprofv3` command-line tool.
+  </Card>
+  <Card title="ROCTracer" icon="list" href="https://github.com/ROCm/roctracer">
+    Intercepts runtime API calls and traces asynchronous GPU activity for timeline visualization.
+  </Card>
+  <Card title="ROCProfiler" icon="bar-chart" href="https://github.com/ROCm/rocprofiler">
+    Profiling tool for HIP applications, providing hardware performance counter collection and kernel timing.
+  </Card>
+  <Card title="ROCm Bandwidth Test" icon="zap" href="https://github.com/ROCm/rocm_bandwidth_test">
+    Captures the performance characteristics of buffer copying and kernel read/write operations between host and device memory.
+  </Card>
+</CardGroup>
+
+<Tip>
+For new projects, use **ROCprofiler-SDK** (`rocprofv3`) as the primary profiling tool. ROCProfiler and ROCTracer are older interfaces that remain available for compatibility.
+</Tip>
+
+## Development tools
+
+Development tools support porting CUDA code to HIP, debugging GPU kernels, and integrating ROCm into build systems.
+
+<CardGroup cols={2}>
+  <Card title="HIPIFY" icon="refresh-cw" href="https://github.com/ROCm/HIPIFY">
+    Translates CUDA source code into portable HIP C++. Supports both source-to-source translation and CUDA API call mapping.
+  </Card>
+  <Card title="ROCm CMake" icon="settings" href="https://github.com/ROCm/rocm-cmake">
+    Collection of CMake modules for common build and development tasks in ROCm projects.
+  </Card>
+  <Card title="ROCm Debugger (ROCgdb)" icon="bug" href="https://github.com/ROCm/ROCgdb">
+    Source-level debugger for Linux based on the GNU Debugger (GDB), supporting both host CPU and GPU device code.
+  </Card>
+  <Card title="ROCdbgapi" icon="code-2" href="https://github.com/ROCm/ROCdbgapi">
+    ROCm debugger API library providing a low-level interface for building GPU debuggers.
+  </Card>
+  <Card title="ROCr Debug Agent" icon="alert-triangle" href="https://github.com/ROCm/rocr_debug_agent">
+    Prints the state of all AMD GPU wavefronts that caused a queue error by sending a `SIGQUIT` signal to the process.
+  </Card>
+</CardGroup>
+
+### Using HIPIFY
+
+HIPIFY can translate entire projects or individual files:
+
+```bash
+# Translate a single CUDA source file
+hipify-clang my_cuda_kernel.cu -o my_hip_kernel.hip
+
+# Translate a project using the perl-based tool
+hipify-perl --inplace my_cuda_project/
+```
+
+## Compilers
+
+ROCm provides compilers for HIP C++, Fortran, and OpenCL targeting AMD GPU architectures.
+
+<CardGroup cols={2}>
+  <Card title="ROCm LLVM (amdclang++)" icon="cpu" href="https://github.com/ROCm/llvm-project">
+    ROCm's LLVM-based compiler infrastructure. The `amdclang++` driver compiles HIP C++ into binaries containing both host CPU and device GPU code.
+  </Card>
+  <Card title="HIPCC" icon="terminal" href="https://github.com/ROCm/HIPCC">
+    Compiler driver utility that calls Clang and passes the appropriate include and library options for the target compiler and HIP infrastructure.
+  </Card>
+  <Card title="FLANG" icon="function-square" href="https://github.com/ROCm/flang">
+    An out-of-tree Fortran compiler targeting LLVM. Enables GPU-offloading for Fortran-based HPC applications.
+  </Card>
+</CardGroup>
+
+### Compiling a HIP program
+
+```bash
+# Compile a HIP source file targeting MI300X (gfx942)
+amdclang++ -x hip --offload-arch=gfx942 my_kernel.hip -o my_program
+
+# Using HIPCC (wraps amdclang++)
+hipcc --offload-arch=gfx942 my_kernel.hip -o my_program
+
+# Compile for multiple architectures
+hipcc --offload-arch=gfx942 --offload-arch=gfx1100 my_kernel.hip -o my_program
+```
+
+<Note>
+`HIPCC` is a convenience wrapper around `amdclang++`. For new projects, calling `amdclang++` directly is preferred as it provides more explicit control over compilation flags.
+</Note>
+
+## Runtime
+
+| Component | Description | GitHub |
+|-----------|-------------|--------|
+| **HIP** | C++ runtime API and kernel language for AMD GPUs. Provides the programming model, device management, memory allocation, and kernel launch APIs. | [ROCm/HIP](https://github.com/ROCm/HIP) |
+| **AMD CLR** | AMD's Common Language Runtime, which implements the HIP runtime and OpenCL runtime on AMD hardware. | [ROCm/clr](https://github.com/ROCm/clr) |
+| **ROCr Runtime** | Low-level HSA (Heterogeneous System Architecture) runtime that underlies HIP and other AMD runtimes. | [ROCm/ROCR-Runtime](https://github.com/ROCm/ROCR-Runtime) |

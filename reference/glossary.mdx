@@ -1,0 +1,283 @@
+---
+title: "Glossary"
+description: "Definitions of key terms used in ROCm documentation"
+keywords: ["ROCm", "glossary", "terminology", "HIP", "CDNA", "RDNA", "wavefront", "compute unit", "LDS", "VRAM", "SIMD"]
+---
+
+This glossary provides concise definitions of key terms and concepts in AMD ROCm programming. Terms are organized into four sections covering device hardware, device software, host software, and performance analysis.
+
+<Tabs>
+  <Tab title="Device hardware">
+    Hardware components and architectural features of AMD GPUs.
+
+    <AccordionGroup>
+      <Accordion title="AMD device architecture">
+        AMD device architecture is based on unified, programmable compute engines known as Compute Units (CUs). All AMD GPU families — CDNA (Instinct) and RDNA (Radeon) — are built on this foundation, with differences in the number of CUs, cache hierarchy, and specialized units.
+      </Accordion>
+
+      <Accordion title="Compute Unit (CU)">
+        Compute Units (CUs) are the fundamental programmable execution engines in AMD GPUs capable of running complex programs. Each CU contains scalar and vector ALUs, a wavefront scheduler, register files, and local data share (LDS) memory. The number of CUs is a primary determinant of GPU compute throughput.
+      </Accordion>
+
+      <Accordion title="Wavefront (Warp)">
+        A wavefront (also called a warp in CUDA terminology) is a group of work-items (threads) that execute together in lockstep on a single compute unit, sharing one instruction stream. On AMD Instinct GPUs, the wavefront size is 64 threads. On AMD Radeon GPUs, the wavefront size is 32 threads. See also: wavefront size.
+      </Accordion>
+
+      <Accordion title="Wavefront size">
+        The number of work-items that execute together in a single wavefront. For AMD Instinct (CDNA) GPUs, the wavefront size is 64 threads. For AMD Radeon (RDNA) GPUs, the wavefront size is 32 threads, though RDNA GPUs can also run in wave64 mode.
+      </Accordion>
+
+      <Accordion title="Work-item (Thread)">
+        A work-item (also called a thread) is the smallest unit of execution on an AMD GPU and represents a single element of work within a kernel launch. Work-items are grouped into wavefronts for execution, and into work-groups for synchronization.
+      </Accordion>
+
+      <Accordion title="Work-group (Block)">
+        A work-group (also called a block in CUDA terminology) is a collection of wavefronts scheduled together on a single compute unit. Work-items within a work-group can coordinate through Local Data Share (LDS) memory and synchronize using barriers.
+      </Accordion>
+
+      <Accordion title="SIMD core">
+        SIMD (Single Instruction, Multiple Data) cores are execution lanes that perform scalar and vector arithmetic operations inside each compute unit. In CDNA architecture GPUs, each CU contains 4 SIMD units, each processing 16 work-items per clock cycle (for a total wavefront width of 64).
+      </Accordion>
+
+      <Accordion title="Matrix cores (MFMA units)">
+        Matrix cores (also called MFMA — Matrix Fused Multiply-Add — units) are specialized execution units that perform large-scale matrix operations in a single instruction, delivering high throughput for AI and HPC workloads. CDNA2 (MI200) and later GPUs include matrix cores with support for FP64, FP32, FP16, BF16, and INT8 precisions.
+      </Accordion>
+
+      <Accordion title="ALU">
+        Arithmetic Logic Unit (ALU) — the primary arithmetic engine that executes mathematical and logical operations within compute units. AMD GPUs contain separate scalar ALUs (SALUs) and vector ALUs (VALUs).
+      </Accordion>
+
+      <Accordion title="SALU (Scalar ALU)">
+        Scalar ALUs (SALUs) operate on a single value per wavefront and manage all control flow, including branch instructions, loop counters, and address calculations that are uniform across a wavefront.
+      </Accordion>
+
+      <Accordion title="VALU (Vector ALU)">
+        Vector ALUs (VALUs) perform an arithmetic or logical operation on data for each work-item in a wavefront simultaneously, enabling data-parallel execution. VALUs are the primary compute engines for most GPU workloads.
+      </Accordion>
+
+      <Accordion title="Local data share (LDS)">
+        Local Data Share (LDS) is fast on-chip memory local to each compute unit and shared among all work-items in a work-group. LDS enables efficient data sharing and coordination between threads. In CUDA terminology, LDS is called shared memory. Typical LDS sizes are 64 KiB per CU on most AMD GPUs.
+      </Accordion>
+
+      <Accordion title="VGPR (Vector General-Purpose Register)">
+        Vector General-Purpose Registers (VGPRs) hold data produced and consumed by the vector ALU. Each work-item in a wavefront has its own VGPR storage. Higher VGPR usage per thread reduces the number of wavefronts that can simultaneously reside on a CU (occupancy).
+      </Accordion>
+
+      <Accordion title="SGPR (Scalar General-Purpose Register)">
+        Scalar General-Purpose Registers (SGPRs) hold data shared across an entire wavefront and are used by the scalar ALU for uniform values such as loop counters and pointers.
+      </Accordion>
+
+      <Accordion title="AccVGPR">
+        Accumulation Vector General-Purpose Registers (AccVGPRs) are a special type of VGPR used exclusively for matrix operations on GPUs with matrix cores (MFMA units). The MI100 features 256 VGPR + 256 AccVGPR. Later CDNA architectures merged AccVGPRs back into the standard VGPR file.
+      </Accordion>
+
+      <Accordion title="GPU RAM (VRAM)">
+        GPU RAM, also known as global memory in the HIP programming model, is the large, high-capacity off-chip memory subsystem accessible by all compute units. On AMD Instinct GPUs, VRAM is implemented as HBM (High Bandwidth Memory) with very high bandwidth. On Radeon GPUs, VRAM is typically GDDR6.
+      </Accordion>
+
+      <Accordion title="Register file">
+        The register file is the primary on-chip memory store in each compute unit, holding data between arithmetic and memory operations. It consists of the VGPR file (for vector data) and SGPR file (for scalar/uniform data). Register file size constrains occupancy.
+      </Accordion>
+
+      <Accordion title="XCD (Accelerator Complex Die)">
+        On AMD Instinct MI300 and MI350 series GPUs, the Accelerator Complex Die (XCD) is a chiplet containing the GPU's computational elements and lower cache levels. MI300X has 8 XCDs with 38 CUs each (304 total). The chiplet design allows higher total CU count and VRAM capacity through multi-die packaging.
+      </Accordion>
+
+      <Accordion title="GCD (Graphics Compute Die)">
+        On AMD Instinct MI100 and MI250 series GPUs and AMD Radeon GPUs, the Graphics Compute Die (GCD) contains the GPU's computational elements and lower cache levels. MI250X has 2 GCDs with 110 CUs each.
+      </Accordion>
+
+      <Accordion title="WGP (Workgroup Processor)">
+        A Workgroup Processor (WGP) is a hardware unit on AMD Radeon (RDNA) GPUs that contains two compute units and their associated resources. WGPs enable efficient scheduling and sharing of L0 caches between paired CUs.
+      </Accordion>
+
+      <Accordion title="GFX IP">
+        GFX IP (Graphics IP) versions are identifiers that specify which instruction formats, memory models, and compute features are supported by each AMD GPU generation. The LLVM target name (e.g., `gfx942`, `gfx1100`) corresponds to specific GFX IP versions and is used when compiling HIP code for a target GPU.
+      </Accordion>
+
+      <Accordion title="Infinity Cache (L3 cache)">
+        On AMD Instinct MI300/MI350 series and AMD Radeon GPUs, the Infinity Cache is the last-level cache shared by all compute units. It acts as a high-bandwidth cache for the VRAM, reducing pressure on memory bandwidth for workloads with good data locality.
+      </Accordion>
+
+      <Accordion title="Load/store unit (LSU)">
+        Load/store units (LSUs) handle data transfer between compute units and the GPU's memory subsystems, managing thousands of concurrent memory operations to maintain throughput despite memory latency.
+      </Accordion>
+
+      <Accordion title="Wavefront scheduler">
+        The wavefront scheduler in each compute unit decides which wavefront to execute each clock cycle. By rapidly switching between ready wavefronts, the scheduler hides memory and instruction latency, keeping the execution pipelines busy.
+      </Accordion>
+
+      <Accordion title="Data movement engine (DME)">
+        Data movement engines (DMEs) are specialized hardware units in AMD Instinct MI300 and MI350 series GPUs that accelerate multi-dimensional tensor data copies between global memory and on-chip memory, reducing the need for software-managed data movement.
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+
+  <Tab title="Device software">
+    Software abstractions and programming models that run on AMD GPUs.
+
+    <AccordionGroup>
+      <Accordion title="ROCm programming model">
+        The ROCm programming model defines how AMD GPUs execute massively parallel programs using hierarchical work-groups, memory scopes, and barrier synchronization. It maps onto hardware from individual work-items (SIMD lanes) to work-groups (compute units) to the full GPU grid.
+      </Accordion>
+
+      <Accordion title="HIP kernel">
+        A HIP kernel is the unit of GPU code that executes in parallel across many threads, distributed across the GPU's compute units. Kernels are launched from host code using the `<<<grid, block>>>` syntax (or `hipLaunchKernel`) and execute asynchronously by default.
+
+        ```cpp
+        __global__ void my_kernel(float* data, int n) {
+            int idx = blockIdx.x * blockDim.x + threadIdx.x;
+            if (idx < n) data[idx] *= 2.0f;
+        }
+
+        // Launch: 1024 blocks of 256 threads each
+        my_kernel<<<1024, 256>>>(d_data, n);
+        ```
+      </Accordion>
+
+      <Accordion title="Grid">
+        A grid represents the collection of all work-groups executing a single kernel across the entire GPU. The grid dimensions determine the total number of work-items launched. Grids can be 1D, 2D, or 3D.
+      </Accordion>
+
+      <Accordion title="HIP thread hierarchy">
+        The thread hierarchy structures parallel work from individual threads (work-items) to blocks (work-groups) to grids. In HIP: `threadIdx` gives the thread position within its block, `blockIdx` gives the block position in the grid, and `blockDim` and `gridDim` give their respective dimensions.
+      </Accordion>
+
+      <Accordion title="HIP memory hierarchy">
+        The memory hierarchy pairs each level of the thread hierarchy with corresponding memory: registers (per-thread), LDS/shared memory (per-work-group), and global memory/VRAM (device-wide). Understanding the memory hierarchy is essential for optimizing GPU code.
+      </Accordion>
+
+      <Accordion title="Global memory">
+        Global memory is the device-wide memory (VRAM) accessible to all threads. It is the largest but slowest form of GPU memory and is physically implemented as HBM (Instinct GPUs) or GDDR6 (Radeon GPUs). Access patterns should be coalesced to maximize bandwidth.
+      </Accordion>
+
+      <Accordion title="AMDGPU assembly (GFX ISA)">
+        AMDGPU assembly is the low-level assembly format for programs running on AMD GPUs, generated by the ROCm compiler toolchain. Understanding assembly is useful for diagnosing compiler output and hand-tuning critical kernels.
+      </Accordion>
+
+      <Accordion title="LLVM target name">
+        The LLVM target name is a string identifier (e.g., `gfx942`, `gfx1100`) corresponding to a specific GFX IP version. It is passed to the HIP compiler to specify the target GPU architecture for code generation: `amdclang++ --offload-arch=gfx942`.
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+
+  <Tab title="Host software">
+    Development tools, compilers, libraries, and runtime environments for programming AMD GPUs.
+
+    <AccordionGroup>
+      <Accordion title="ROCm">
+        ROCm (Radeon Open Compute) is AMD's open-source GPU software stack, providing compiler toolchains, runtime environments, and performance libraries for HPC and AI applications. ROCm supports HIP, OpenCL, and OpenMP as programming interfaces.
+      </Accordion>
+
+      <Accordion title="HIP">
+        HIP (Heterogeneous-Compute Interface for Portability) is a C++ runtime API and kernel language for AMD GPUs. HIP provides a CUDA-like programming interface that compiles natively for AMD hardware and can also target NVIDIA GPUs through a translation layer.
+      </Accordion>
+
+      <Accordion title="HIP runtime API">
+        The HIP runtime API provides an interface for GPU programming, offering functions for memory management (`hipMalloc`, `hipMemcpy`), kernel launches, and synchronization (`hipDeviceSynchronize`). It closely mirrors the CUDA runtime API.
+      </Accordion>
+
+      <Accordion title="HIP C++ language extensions">
+        HIP extends the C++ language with additional features for programming heterogeneous applications. These include `__global__`, `__device__`, and `__host__` qualifiers, built-in thread ID variables (`threadIdx`, `blockIdx`), synchronization (`__syncthreads()`), and memory qualifiers for LDS (`__shared__`).
+      </Accordion>
+
+      <Accordion title="HIP compiler (amdclang++)">
+        The HIP compiler `amdclang++` compiles HIP C++ programs into binaries containing both host CPU code and device GPU code. It is based on the LLVM/Clang toolchain and is part of the ROCm LLVM distribution.
+      </Accordion>
+
+      <Accordion title="HIP runtime compiler (HIPRTC)">
+        The HIP Runtime Compiler (HIPRTC) compiles HIP source code at runtime into AMDGPU binary code objects, enabling just-in-time kernel generation, device-specific optimization, and dynamic code creation for different GPUs.
+      </Accordion>
+
+      <Accordion title="HIPCC">
+        HIPCC is a compiler driver utility that wraps `amdclang++` and passes the appropriate include and library options for the target compiler and HIP infrastructure. It simplifies compiling HIP programs without manually specifying all flags.
+      </Accordion>
+
+      <Accordion title="HIPIFY">
+        HIPIFY is a tool that automatically translates CUDA source code into portable HIP C++. It supports both source-to-source translation (`hipify-clang`, `hipify-perl`) and produces a report of API calls that required manual porting.
+      </Accordion>
+
+      <Accordion title="ROCgdb">
+        ROCgdb is AMD's source-level debugger for HIP and ROCm applications, based on the GNU Debugger (GDB). It enables debugging of both host CPU and GPU device code, including kernel breakpoints, stepping, and wavefront state inspection.
+      </Accordion>
+
+      <Accordion title="AMD SMI (amd-smi)">
+        The `amd-smi` command-line utility queries, monitors, and manages AMD GPU state. It provides hardware information, temperature, power consumption, clock speeds, and process-level GPU utilization metrics.
+      </Accordion>
+
+      <Accordion title="rocprofv3">
+        `rocprofv3` is AMD's primary performance analysis tool, part of ROCprofiler-SDK. It provides profiling, tracing, and hardware performance counter collection for GPU kernels.
+      </Accordion>
+
+      <Accordion title="Stream">
+        In HIP, a stream is a sequence of operations (kernel launches and memory copies) that execute in order on the GPU. Operations in different streams may execute concurrently. The default stream (stream 0) is synchronous with all other streams.
+      </Accordion>
+
+      <Accordion title="Event">
+        A HIP event is a timestamp recorded in a stream, used to measure elapsed time between GPU operations or to synchronize between streams. Events are created with `hipEventCreate`, recorded with `hipEventRecord`, and queried with `hipEventElapsedTime`.
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+
+  <Tab title="Performance">
+    Performance analysis concepts and optimization techniques for AMD GPU workloads.
+
+    <AccordionGroup>
+      <Accordion title="Roofline model">
+        The roofline model is a visual performance model that determines whether a program is compute-bound or memory-bound. It plots achieved performance (FLOP/s) against arithmetic intensity (FLOP/byte), with a "roof" defined by peak compute throughput and peak memory bandwidth.
+      </Accordion>
+
+      <Accordion title="Arithmetic intensity">
+        Arithmetic intensity is the ratio of arithmetic operations to memory operations in a kernel, measured in FLOP/byte. It determines whether a kernel is compute-bound (high intensity) or memory-bound (low intensity) relative to the hardware's compute-to-bandwidth ratio.
+      </Accordion>
+
+      <Accordion title="Compute-bound">
+        A compute-bound kernel is limited by the arithmetic throughput of the GPU's compute units rather than memory bandwidth. Optimization strategies focus on increasing arithmetic intensity and reducing instruction overhead.
+      </Accordion>
+
+      <Accordion title="Memory-bound">
+        A memory-bound kernel is limited by memory bandwidth rather than arithmetic throughput, typically due to low arithmetic intensity. Optimization strategies include memory coalescing, caching in LDS, and reducing redundant loads.
+      </Accordion>
+
+      <Accordion title="Occupancy">
+        Occupancy is the ratio of active wavefronts to the maximum number of wavefronts that can be simultaneously resident on a compute unit. Higher occupancy helps hide memory latency, but does not always improve performance if the kernel is compute-bound.
+      </Accordion>
+
+      <Accordion title="Latency hiding">
+        Latency hiding masks long-latency operations (such as global memory loads) by running many concurrent wavefronts. When one wavefront stalls waiting for data, the wavefront scheduler switches to another ready wavefront, keeping execution pipelines busy.
+      </Accordion>
+
+      <Accordion title="Memory coalescing">
+        Memory coalescing improves memory bandwidth efficiency by combining many logical loads or stores from threads in the same wavefront into fewer physical memory transactions. For optimal coalescing, adjacent threads should access adjacent memory addresses.
+      </Accordion>
+
+      <Accordion title="Wavefront divergence">
+        Wavefront divergence occurs when threads within a wavefront take different execution paths due to conditional statements. Since all threads in a wavefront share one instruction pointer, divergent branches are serialized, reducing effective parallelism.
+      </Accordion>
+
+      <Accordion title="Memory bandwidth">
+        Memory bandwidth is the maximum rate at which data can be transferred between memory hierarchy levels, typically measured in GB/s. AMD Instinct MI300X provides ~5.3 TB/s of HBM3 bandwidth, while Radeon GPUs typically provide several hundred GB/s of GDDR6 bandwidth.
+      </Accordion>
+
+      <Accordion title="Occupancy and register pressure">
+        Register pressure occurs when excessive register demand per thread reduces the number of wavefronts that can simultaneously reside on a compute unit (occupancy). Compilers and programmers can control register usage to balance occupancy against arithmetic performance.
+      </Accordion>
+
+      <Accordion title="Bank conflict (LDS)">
+        A bank conflict occurs when multiple threads in a wavefront simultaneously access different addresses in the same LDS bank, serializing those accesses. LDS is divided into 32 banks; accessing addresses that map to the same bank from different threads in the same instruction cycle creates a conflict.
+      </Accordion>
+
+      <Accordion title="Pipe utilization">
+        Pipe utilization measures how effectively a kernel uses the execution pipelines (VALU, SALU, MFMA, memory) within each compute unit. Low pipe utilization indicates the GPU is not keeping its execution units busy.
+      </Accordion>
+
+      <Accordion title="Little's Law">
+        Little's Law relates concurrency, latency, and throughput in a queuing system: concurrency = throughput × latency. On GPUs, it determines how many concurrent memory requests (or wavefronts) must be in flight to saturate memory bandwidth or hide latency.
+      </Accordion>
+
+      <Accordion title="CU utilization">
+        CU utilization measures the percentage of time that compute units are actively executing instructions. Low CU utilization typically indicates insufficient work to keep all CUs busy, a launch configuration mismatch, or excessive synchronization overhead.
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+</Tabs>
